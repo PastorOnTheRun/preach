@@ -86,7 +86,8 @@ js/format.js            paste/HTML sanitizer, txt/md converter, docx import
 js/storage.js           localStorage settings/library/state
 js/sample.js            sample sermon
 config.js               team config: supabaseUrl, supabaseAnonKey, apiBibleKey
-sw.js, manifest.webmanifest, icons/   PWA
+sw.js, manifest.webmanifest, icons/   PWA (network-first app code with 3 s offline fallback; fonts/icons/vendor cache-first; auto-update, never mid-sermon)
+tests/update_e2e.py     service-worker update delivery + offline tests (serves its own copy of the site)
 vendor/mammoth.browser.min.js         mammoth 1.13.0 (BSD-2)
 tests/e2e.py            Playwright end-to-end test (64 checks), tests/fixtures/
 screenshots/            output of the test run

@@ -187,6 +187,7 @@
 </section>
 
 <!-- ================= PREACH ================= -->
+<button id="update-pill" class="update-pill" type="button" hidden><svg class="ic sm"><use href="#i-reset"/></svg>Update ready — tap to refresh</button>
 <section id="preach" class="view" hidden>
   <header class="pbar top">
     <button id="p-exit" class="icon-btn" aria-label="Back to home" title="Back to home"><svg class="ic"><use href="#i-back"/></svg></button>
@@ -395,6 +396,11 @@
         <span class="label">Storage</span>
         <div class="help" id="s-storage" style="margin-bottom:10px"></div>
         <button class="btn danger" id="s-wipe"><svg class="ic sm"><use href="#i-trash"/></svg>Delete all sermons &amp; recordings</button>
+      </div>
+      <hr class="divider">
+      <div class="field row-between">
+        <div><span class="label" style="margin:0">Version</span><div class="help mono" id="s-update-status" style="margin-top:2px"></div></div>
+        <div style="display:flex;gap:10px;align-items:center"><span class="mono s-version" id="s-version"></span><button class="btn sm" id="s-check-update" type="button">Check for updates</button></div>
       </div>
     </div>
   </div>

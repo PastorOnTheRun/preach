@@ -14,7 +14,8 @@ import { SAMPLE_TITLE, SAMPLE_MD } from './sample.js';
 import { extractSlides, publicSlide, verseSlide } from './slides.js';
 import { ScreenLink, newCode, validCode, screenAvailable } from './screenlink.js';
 
-export const VERSION = '1.4.0';
+export const VERSION = '1.4.1';
+const upd = { reg: null, ready: false, reloading: false, waitedOnce: false }; // service-worker update state (see bottom)
 const FONT_SIZES = [18, 20, 22, 24, 26, 28, 30, 33, 36, 40, 44, 48, 54, 60, 68, 76];
 const PRESETS = [20, 25, 30, 35, 40];
 const WPM = 130; // typical preaching pace, for the length estimate
@@ -63,6 +64,7 @@ function show(view) {
   document.body.dataset.view = view;
   if (view === 'home') renderHome();
   window.scrollTo(0, 0);
+  if (view !== 'preach' && upd.ready) setTimeout(() => applyUpdate(), 400); // safe moment after preaching
 }
 
 // ---------------------------------------------------------------- home
@@ -102,6 +104,7 @@ function renderHome() {
   renderRecordings();
   renderAccount();
   $('#app-version').textContent = 'v' + VERSION;
+  $('#s-version').textContent = 'v' + VERSION;
 }
 
 async function renderRecordings() {
@@ -1122,10 +1125,58 @@ if (isConfigured()) {
   initAuth();
   if (location.hash === '#signin') { history.replaceState(null, '', location.pathname); openSignIn(); }
 }
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW failed', e)));
+// ---------------------------------------------------------------- updates (service worker)
+// Network-first SW + update checks on load and whenever the app returns to the foreground. A new
+// version activates right away and the page reloads once at a safe moment: never mid-sermon or
+// mid-recording (then a small "Update ready" pill appears instead).
+function updateSafe() {
+  return currentView !== 'preach' && currentView !== 'edit' && (!recorder || recorder.state === 'idle') && !document.querySelector('dialog[open]');
 }
+function applyUpdate(force = false) {
+  if (!upd.ready || upd.reloading) return;
+  if (!force && !updateSafe()) { $('#update-pill').hidden = false; return; }
+  upd.reloading = true; location.reload();
+}
+function onWaiting(w) { if (w && navigator.serviceWorker.controller) w.postMessage({ type: 'SKIP_WAITING' }); }
+async function checkForUpdate() {
+  if (!upd.reg) return;
+  try { await upd.reg.update(); } catch (_) { /* offline */ }
+}
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController && !upd.ready && !upd.waitedOnce) return; // first install: nothing to refresh
+    upd.ready = true; applyUpdate();
+  });
+  window.addEventListener('load', async () => {
+    try {
+      const reg = upd.reg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+      if (reg.waiting && navigator.serviceWorker.controller) { upd.waitedOnce = true; onWaiting(reg.waiting); }
+      reg.addEventListener('updatefound', () => {
+        const w = reg.installing; if (!w) return;
+        w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) { upd.waitedOnce = true; onWaiting(w); } });
+      });
+      checkForUpdate();
+    } catch (e) { console.warn('SW failed', e); }
+  });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); else applyUpdate(); });
+  window.addEventListener('online', checkForUpdate);
+  setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine) checkForUpdate(); }, 30 * 60 * 1000);
+}
+$('#update-pill').addEventListener('click', () => {
+  if (recorder && recorder.state !== 'idle') { toast('Stop the recording first, then tap to refresh.', 3500); return; }
+  applyUpdate(true);
+});
+$('#s-check-update').addEventListener('click', async () => {
+  const st = $('#s-update-status');
+  if (!upd.reg) { st.textContent = 'Updates aren’t available here.'; return; }
+  st.textContent = 'Checking…';
+  await checkForUpdate();
+  const r = upd.reg;
+  st.textContent = upd.ready || r.waiting || r.installing ? 'Update found. Close Settings to refresh.' : navigator.onLine ? 'You’re on the latest version.' : 'You’re offline. Try again when connected.';
+});
+$('#dlg-settings').addEventListener('close', () => setTimeout(() => applyUpdate(), 50));
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 // Expose a tiny hook for automated tests / debugging.
-window.__preach = { screen: { get slides() { return slides; }, get liveIdx() { return liveIdx; }, get blank() { return blank; }, connected: () => screenConnected() }, get paginator() { return paginator; }, timer, recorder, settings, state, enterPreach, sync, auth, VERSION };
+window.__preach = { screen: { get slides() { return slides; }, get liveIdx() { return liveIdx; }, get blank() { return blank; }, connected: () => screenConnected() }, get paginator() { return paginator; }, timer, recorder, settings, state, enterPreach, sync, auth, VERSION, update: { state: upd, check: checkForUpdate, safe: updateSafe } };
