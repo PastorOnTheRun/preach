@@ -1,11 +1,11 @@
 // Preach service worker: precache the app shell so it works offline (e.g. spotty church Wi-Fi).
 // Bump VERSION on every release so devices pick up the new files.
-const VERSION = 'preach-v1.2.1';
+const VERSION = 'preach-v1.3.0';
 const SHELL = [
   './', 'index.html', 'config.js', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/util.js', 'js/storage.js', 'js/format.js', 'js/bible.js', 'js/paginator.js',
   'js/timer.js', 'js/recorder.js', 'js/feedback.js', 'js/sample.js',
-  'js/cloud.js', 'js/sync.js', 'js/review.js', 'review.html',
+  'js/cloud.js', 'js/sync.js', 'js/review.js', 'review.html', 'js/grade.js',
   'js/slides.js', 'js/screenlink.js', 'js/screen.js', 'screen.html', 'css/screen.css', 'fonts/archivo-wide-latin.woff2',
   'vendor/mammoth.browser.min.js', 'vendor/supabase.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'

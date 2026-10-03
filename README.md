@@ -1,4 +1,4 @@
-# Preach — sermon delivery app (v1.2)
+# Preach — sermon delivery app (v1.3)
 
 A calm, offline-capable **preaching mode** for the Family Church (Windermere, FL) student teaching team.
 Static PWA: plain HTML/CSS/vanilla JS (ES modules), no build step, no backend. Ready for GitHub Pages.
@@ -16,7 +16,7 @@ python3 -m http.server 8765        # then open http://localhost:8765
 - **Text size** A−/A+ (repaginates and keeps your place), **dark/light** toggle, serif/sans option.
 - **Countdown timer**: presets 20/25/30/35/40 + custom, start/pause/reset, yellow/orange warnings (default 5 and 2 min), overtime counts up (`+1:23`) and a thick red border pulses at 1 Hz. Survives refresh.
 - **Verse popups (CSB only)**: references like `John 3:16`, `Rom 8:28-30`, `1 Cor 13:4-7`, `Psalm 23`, `Jude 24` become tappable. With an API.Bible key the CSB text shows in a popup (with the required copyright line + FUMS reporting); without a key, the popup offers a one-tap link to BibleGateway with `version=CSB`.
-- **Recording**: MediaRecorder → IndexedDB in 4-second chunks (crash-safe; unfinished recordings are recovered on next launch). Optional "record when timer starts". After stopping: play, Download, Share/Save to Files (iOS), and **Send for feedback** → `sendForFeedback(audioBlob, metadata)` in `js/feedback.js` uploads to Supabase Storage + a `recordings` row when signed in (AI grading/email = Phase 2 Edge Function TODO).
+- **Recording**: MediaRecorder → IndexedDB in 4-second chunks (crash-safe; unfinished recordings are recovered on next launch). Optional "record when timer starts". After stopping: play, Download, Share/Save to Files (iOS), and **Send for feedback** → `sendForFeedback(audioBlob, metadata)` in `js/feedback.js` uploads to Supabase Storage + a `recordings` row when signed in, then starts automatic AI feedback (below).
 
 ## Verse lookup setup (API.Bible)
 1. Create a free account at https://api.bible (Starter plan: free, non-commercial, 5,000 calls/month, up to 3 copyrighted Bibles).
@@ -33,6 +33,9 @@ Only the CSB Bible ID is ever requested; no verse text is bundled or cached beyo
 - Admins (`profiles.role = 'admin'`) get a **Review** button → `review.html`: every preacher's recordings and sermons, newest first, filter by preacher, audio via 1-hour signed URLs, read-only manuscript, transcript/summary/grade when present.
 - Security is enforced by Row Level Security in `supabase/schema.sql`, not by the UI.
 
+## Automatic AI feedback (Phase 2)
+After **Send for feedback**, the `grade-recording` Supabase Edge Function transcribes the audio with xAI speech-to-text, grades it with Grok (`grok-4.7`, strict JSON) on a fixed pastoral rubric (big idea, faithfulness, structure, illustrations, application, delivery/time, gospel clarity), saves transcript/summary/grade on the `recordings` row and emails Jake via Resend. Preachers see their grade in their recordings list; Jake sees it on `review.html`. Setup and deploy: SETUP.md §7.
+
 ## Big screen (projector) mode
 - Open **`screen.html`** on the projector/TV computer (e.g. https://pastorontherun.github.io/preach/screen.html). It shows only a neutral “Waiting to connect” screen with a masked code box.
 - On the preacher’s iPad: **Settings › Big screen** → turn on → **Show code** (hidden by default, auto-hides after 30 s) → type it on the projector. After pairing the code is never shown on the big screen; it reconnects by itself after a reload.
@@ -47,9 +50,10 @@ Matches Jake’s Stage Ready app (PastorOnTheRun/stage-ready): warm off-white do
 ```
 python3 -m http.server 8765 --bind 127.0.0.1 &
 /workspace/venv/bin/python tests/e2e.py           # core app (64 checks)
-/workspace/venv/bin/python tests/accounts_e2e.py  # accounts/sync/review with mocked Supabase (41 checks)
+/workspace/venv/bin/python tests/accounts_e2e.py  # accounts/sync/review/AI feedback with mocked Supabase (58 checks)
 /workspace/venv/bin/python tests/screen_e2e.py    # slide extraction + big-screen pairing with mocked Realtime
 /workspace/venv/bin/python tests/style_shots.py   # style-*.png screenshots
+(cd supabase/functions/grade-recording && deno test --allow-env)  # Edge Function unit tests (mocked xAI/Resend/Supabase)
 ```
 
 ## Files
@@ -61,7 +65,8 @@ js/paginator.js         column pagination + position anchoring
 js/timer.js             countdown/overtime timer
 js/bible.js             reference parser, API.Bible (CSB) client, BibleGateway fallback, FUMS
 js/recorder.js          MediaRecorder + IndexedDB storage/recovery
-js/feedback.js          sendForFeedback() — uploads recording to Supabase (grading = Phase 2 TODO)
+js/feedback.js          sendForFeedback() — uploads recording to Supabase, starts AI grading
+js/grade.js             renders AI feedback (preacher dialog + review page)
 js/cloud.js             Supabase client (lazy-loaded), auth (magic link/code/password), remote, admin queries
 js/sync.js              local-first sync engine (pull → push, last-write-wins)
 js/review.js + review.html  admin review page
@@ -71,6 +76,9 @@ screen.html + js/screen.js + css/screen.css  projector page
 fonts/                  Archivo Wide (SIL OFL)
 vendor/supabase.js      supabase-js 2.117.2 (UMD, MIT)
 supabase/schema.sql     tables, RLS, storage bucket + policies, signup trigger
+supabase/functions/grade-recording/  Edge Function: xAI STT → Grok rubric grade → save → Resend email (Deno, tests in pipeline_test.ts)
+supabase/grading-trigger.sql         optional DB trigger that also starts grading on insert
+supabase/config.toml    CLI config (grade-recording: verify_jwt = false; it authenticates callers itself)
 SETUP.md                step-by-step Supabase setup for Jake
 tests/accounts_e2e.py   Playwright tests with a mocked Supabase (tests/mock-supabase.js)
 js/format.js            paste/HTML sanitizer, txt/md converter, docx import

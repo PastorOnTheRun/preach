@@ -6,6 +6,9 @@
  *   - the RLS rules from supabase/schema.sql (own rows; admins read all; role not self-editable)
  *   - server-set synced_at (monotonic), the profile-on-signup trigger
  *   - Storage: private bucket with user_id/ path prefix rule + signed URLs
+ *   - functions.invoke('grade-recording'): owner/admin check + claim (status → processing), logged in
+ *     db.fnlog; tests finish the job with window.__mockFinishGrading(id, {fail}). localStorage
+ *     '__mockfnfail' = '1' makes invoke return an error.
  * State lives in localStorage (__mockdb) so it survives reloads and is shared by
  * index.html and review.html. Tests seed it via window.__MOCK_SEED (addInitScript).
  */
@@ -55,6 +58,7 @@
     select() { if (this.op !== 'select') this._returning = true; return this; }
     eq(c, v) { this.filters.push(r => r[c] === v); return this; }
     gt(c, v) { this.filters.push(r => r[c] > v); return this; }
+    in(c, vals) { this.filters.push(r => vals.includes(r[c])); return this; }
     order(c, o = {}) { this._order = [c, o.ascending !== false]; return this; }
     limit(n) { this._limit = n; return this; }
     single() { this._single = 'single'; return this; }
@@ -105,6 +109,47 @@
       if (this._single === 'maybe') return { data: out[0] || null, error: null };
       return { data: out, error: null };
     }
+  }
+
+  // ---------------- Edge Function: grade-recording (Phase 2)
+  const SAMPLE_GRADE = {
+    version: 2, overall: 'B+', average: 7.6,
+    criteria: [
+      ['big_idea', 'Clarity of big idea', 8, 'The father’s welcome came through clearly.'],
+      ['faithfulness', 'Faithfulness to the passage', 9, 'Stayed with Luke 15 in context.'],
+      ['structure', 'Structure & flow', 7, 'The middle section wandered a little.'],
+      ['illustrations', 'Illustrations', 7, 'The airport story landed well.'],
+      ['application', 'Application', 6, 'Make the Monday step more concrete.'],
+      ['delivery', 'Delivery, pace & time management', 7, '138 wpm is comfortable; you ran 2 minutes over.'],
+      ['gospel', 'Gospel clarity', 9, 'Grace was clear and central.']
+    ].map(([key, name, score, comment]) => ({ key, name, score, max: 10, comment })),
+    strengths: ['A clear, text-driven big idea.', 'Warm, pastoral tone.', 'Christ at the centre.'],
+    growth_areas: ['Tighten the middle section.', 'One concrete application.', 'Land the ending on time.'],
+    answer_to_question: 'Yes, the application was a little vague: give one specific step.',
+    timing: { planned_minutes: 25, actual_seconds: 1620, overtime_seconds: 120, words: 3700, wpm: 138 },
+    model: 'grok-4.7', stt_model: 'grok-voice-transcribe-2.0', graded_at: '2026-10-04T15:00:00Z'
+  };
+  window.__mockFinishGrading = function (id, opts = {}) {
+    const db = load(); const r = db.recordings.find(x => x.id === id); if (!r) return false;
+    if (opts.fail) Object.assign(r, { status: 'error', status_detail: 'xAI speech-to-text failed (400): Unsupported audio' });
+    else Object.assign(r, { status: 'graded', status_detail: null, transcript: 'Grace runs to meet us…', summary: 'A faithful, warm sermon on the father’s welcome.', grade_json: SAMPLE_GRADE, graded_at: new Date().toISOString() });
+    save(db); return true;
+  };
+  async function invokeFn(name, opts = {}) {
+    const db = load(); const uid = uidNow(); const body = opts.body || {};
+    db.fnlog = db.fnlog || []; db.fnlog.push({ name, body, uid, at: Date.now() }); save(db);
+    if (localStorage.getItem('__mockfnfail') === '1') return { data: null, error: { message: 'Failed to send a request to the Edge Function', name: 'FunctionsFetchError' } };
+    if (name !== 'grade-recording') return { data: null, error: { message: 'Function not found' } };
+    if (!uid) return { data: null, error: { message: 'Sign in required.' } };
+    const r = db.recordings.find(x => x.id === body.recording_id);
+    if (!r) return { data: null, error: { message: 'Recording not found.' } };
+    const admin = roleOf(db, uid) === 'admin';
+    if (r.user_id !== uid && !admin) return { data: null, error: { message: 'Not allowed to grade this recording.' } };
+    const force = !!body.force && admin;
+    if (r.status === 'graded' && !force) return { data: { status: 'graded', message: 'Already graded.' }, error: null };
+    if (r.status === 'processing') return { data: { status: 'processing', message: 'Already being processed.' }, error: null };
+    Object.assign(r, { status: 'processing', status_detail: 'queued', processing_started_at: new Date().toISOString() }); save(db);
+    return { data: { status: 'processing', message: 'Feedback is on its way.' }, error: null };
   }
 
   function createClient(url, key) {
@@ -198,7 +243,7 @@
       return ch;
     }
     async function removeChannel(ch) { return ch.unsubscribe(); }
-    return { auth, storage, from: t => new Query(t), channel, removeChannel, functions: { invoke: async () => ({ data: null, error: null }) } };
+    return { auth, storage, from: t => new Query(t), channel, removeChannel, functions: { invoke: invokeFn } };
   }
   window.supabase = { createClient };
 })();

@@ -115,16 +115,48 @@ with sync_playwright() as p:
     pg.wait_for_selector('#dlg-saved[open]', timeout=10000)
     pg.fill('#fb-notes', 'Did the ending land?'); pg.click('#fb-send')
     pg.wait_for_function("document.getElementById('fb-status').textContent.startsWith('Sent')", timeout=8000)
+    check('send: "Feedback is on its way" shown', 'Feedback is on its way' in pg.inner_text('#fb-status'), pg.inner_text('#fb-status'))
     db = mockdb(pg)
     rec = [r for r in db['recordings'] if r['user_id'] == chris['id']]
     path = rec[0]['storage_path'] if rec else ''
-    check('recording row inserted (status uploaded)', len(rec) == 1 and rec[0]['status'] == 'uploaded' and rec[0]['sermon_id'] == sid and rec[0]['notes'] == 'Did the ending land?', json.dumps(rec[0] if rec else {})[:160])
+    check('recording row inserted (status uploaded → claimed)', len(rec) == 1 and rec[0]['status'] in ('uploaded', 'processing') and rec[0]['sermon_id'] == sid and rec[0]['notes'] == 'Did the ending land?', json.dumps(rec[0] if rec else {})[:160])
     check('audio uploaded to recordings/<user_id>/<sermon_id>/<timestamp>.<ext>', path.startswith(f"{chris['id']}/{sid}/") and path in db['objects'] and db['objects'][path]['size'] > 0, path)
     pg.screenshot(path=str(SHOTS / 'accounts-feedback-sent.png'))
     pg.click('#dlg-saved .dlg-head [data-close]'); pg.click('#p-exit'); pg.wait_for_selector('#home:not([hidden])')
     try: pg.wait_for_function("document.getElementById('recordings').innerText.includes('sent for review')", timeout=6000)
     except Exception: pass
     check('recording marked as sent in list', 'sent for review' in pg.inner_text('#recordings'))
+
+    # ---------------- Phase 2: automatic AI feedback (grade-recording Edge Function, mocked)
+    rid = rec[0]['id']
+    fn = mockdb(pg).get('fnlog') or []
+    check('send: grade-recording invoked with the new row id and the preacher JWT', len(fn) == 1 and fn[0]['name'] == 'grade-recording' and fn[0]['body'] == {'recording_id': rid} and fn[0]['uid'] == chris['id'], json.dumps(fn)[:200])
+    check('send: row claimed (status processing)', next(r for r in mockdb(pg)['recordings'] if r['id'] == rid)['status'] == 'processing')
+    pg.wait_for_selector('#recordings .fb-pill', timeout=6000)
+    check('list: "Feedback on its way…" pill', 'Feedback on its way' in pg.text_content('#recordings .fb-slot'), pg.text_content('#recordings .fb-slot'))
+    # grading fails -> error pill + Retry
+    pg.evaluate(f"window.__mockFinishGrading('{rid}', {{fail: true}})"); pg.reload(); pg.wait_for_selector('#home:not([hidden])')
+    pg.wait_for_selector('#recordings .fb-pill[data-state="error"]', timeout=8000)
+    check('list: failed grading shows "Feedback failed" + Retry', 'Feedback failed' in pg.text_content('#recordings .fb-slot') and pg.is_visible('#recordings [data-act="retry"]'))
+    check('list: error detail in tooltip', 'Unsupported audio' in (pg.get_attribute('#recordings .fb-pill', 'title') or ''))
+    pg.click('#recordings [data-act="retry"]'); pg.wait_for_selector('#recordings .fb-pill[data-state="waiting"]', timeout=5000)
+    fn = mockdb(pg).get('fnlog') or []
+    check('retry: invokes grade-recording again (no force for preachers)', len(fn) == 2 and fn[1]['body'] == {'recording_id': rid})
+    check('retry: toast "Feedback is on its way."', 'Feedback is on its way' in pg.inner_text('body'))
+    # grading succeeds -> grade pill + feedback dialog
+    pg.evaluate(f"window.__mockFinishGrading('{rid}')"); pg.reload(); pg.wait_for_selector('#home:not([hidden])')
+    pg.wait_for_selector('#recordings .fb-pill[data-state="graded"]', timeout=8000)
+    check('list: graded shows "Grade B+" + View feedback', 'Grade B+' in pg.text_content('#recordings .fb-slot') and pg.is_visible('#recordings [data-act="feedback"]'))
+    pg.screenshot(path=str(SHOTS / 'feedback-list-graded.png'))
+    pg.click('#recordings [data-act="feedback"]'); pg.wait_for_selector('#dlg-feedback[open]')
+    fbt = pg.text_content('#dlg-feedback')
+    check('feedback dialog: grade, summary, 7 areas', 'B+' in fbt and 'father’s welcome' in fbt and pg.eval_on_selector_all('#dlg-feedback .grade-table tr', 'e => e.length') == 8, fbt[:120])
+    check('feedback dialog: strengths, growth areas, answer to their question', all(x in fbt for x in ['Strengths', 'Growth areas', 'Did the ending land?', 'give one specific step']))
+    check('feedback dialog: timing line', '27:00 preached · 25 min planned · 2:00 over · 138 words/min' in fbt)
+    pg.screenshot(path=str(SHOTS / 'feedback-dialog.png'))
+    pg.click('#dlg-feedback [data-close]')
+    cached = pg.evaluate("""new Promise(res => { const o = indexedDB.open('preach'); o.onsuccess = () => { try { const t = o.result.transaction('recordings').objectStore('recordings').getAll(); t.onsuccess = () => res(t.result.map(r => r.cloud && r.cloud.feedback && r.cloud.feedback.status)); } catch (e) { res(String(e)); } }; o.onerror = () => res('noidb'); })""")
+    check('feedback cached on the device recording (works offline)', isinstance(cached, list) and 'graded' in cached, str(cached))
 
     # ---------------- Preacher can't use the review page
     pg.goto(BASE + 'review.html'); pg.wait_for_timeout(1000)
@@ -168,6 +200,19 @@ with sync_playwright() as p:
     check('review: sermon opens read-only', 'Unshakable' in pg.inner_text('#sv-title') and 'read-only' in pg.inner_text('#sv-meta') and pg.eval_on_selector('#sv-body', 'e => !e.isContentEditable'))
     pg.screenshot(path=str(SHOTS / 'review-sermon-open.png'))
     pg.click('#dlg-sermon [data-close]')
+    # Phase 2 on the review page: AI feedback section + admin re-run + email deep link
+    pg.click('#rv-tabs [data-tab="recordings"]'); pg.wait_for_timeout(200)
+    pg.locator('#rv-list .rv-row', has_text='Edited offline').click(); pg.wait_for_selector('#rv-list .rv-ai', timeout=5000)
+    det = pg.text_content('#rv-list .rv-detail')
+    check('review: AI feedback (strengths, growth, answer) for graded recording', all(x in det for x in ['AI feedback', 'Strengths', 'Growth areas', 'give one specific step', 'AI feedback ready']), det[:200])
+    check('review: badge shows grade', 'B+' in pg.locator('#rv-list .rv-item', has_text='Edited offline').locator('.status-badge').inner_text())
+    pg.screenshot(path=str(SHOTS / 'review-ai-feedback.png'), full_page=True)
+    pg.click('#rv-list .rv-detail [data-act="grade"]'); pg.wait_for_timeout(400)
+    fn = mockdb(pg).get('fnlog') or []
+    check('review: admin "Re-run AI feedback" forces a re-grade', fn and fn[-1]['body'] == {'recording_id': rid, 'force': True} and fn[-1]['uid'] == JAKE, json.dumps(fn[-1:]))
+    pg.goto(BASE + 'review.html?rec=' + rid); pg.wait_for_selector('#rv-main:not([hidden])', timeout=8000)
+    pg.wait_for_selector('#rv-list .rv-detail', timeout=5000)
+    check('review: ?rec=<id> deep link (email button) opens that recording', 'Edited offline' in pg.locator('#rv-list .rv-item', has=pg.locator('.rv-detail')).inner_text())
     check('no JS errors', not errors, '; '.join(errors[:4]))
     ctx.close()
 

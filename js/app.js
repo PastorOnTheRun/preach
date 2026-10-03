@@ -7,13 +7,14 @@ import { Paginator } from './paginator.js';
 import { CountdownTimer } from './timer.js';
 import { SermonRecorder, listRecordings, getRecording, deleteRecording, recoverOrphans, wipeRecordings, extFor, recordingSupported, updateRecording } from './recorder.js';
 import { sendForFeedback, setFeedbackSync } from './feedback.js';
-import { isConfigured, initAuth, onAuth, auth, isAdmin, sendMagicLink, verifyCode, signInPassword, signUpPassword, signOut, updateDisplayName, canSync, supabaseRemote } from './cloud.js';
+import { isConfigured, initAuth, onAuth, auth, isAdmin, sendMagicLink, verifyCode, signInPassword, signUpPassword, signOut, updateDisplayName, canSync, supabaseRemote, requestGrading, myFeedback } from './cloud.js';
+import { renderFeedback, feedbackStatus } from './grade.js';
 import { SyncEngine } from './sync.js';
 import { SAMPLE_TITLE, SAMPLE_MD } from './sample.js';
 import { extractSlides, publicSlide, verseSlide } from './slides.js';
 import { ScreenLink, newCode, validCode, screenAvailable } from './screenlink.js';
 
-export const VERSION = '1.2.1';
+export const VERSION = '1.3.0';
 const FONT_SIZES = [18, 20, 22, 24, 26, 28, 30, 33, 36, 40, 44, 48, 54, 60, 68, 76];
 const PRESETS = [20, 25, 30, 35, 40];
 const WPM = 130; // typical preaching pace, for the length estimate
@@ -112,22 +113,109 @@ async function renderRecordings() {
   for (const r of recs) {
     const li = document.createElement('li');
     li.className = 'item';
-    li.innerHTML = `<div class="grow"><div class="name"></div><div class="sub"></div></div>
+    li.dataset.rec = r.id;
+    li.innerHTML = `<div class="grow"><div class="name"></div><div class="sub"></div><div class="fb-slot"></div></div>
       <button class="icon-btn" data-act="delete" aria-label="Delete recording"><svg class="ic sm"><use href="#i-trash"/></svg></button>
       <button class="icon-btn" data-act="download" aria-label="Download"><svg class="ic sm"><use href="#i-download"/></svg></button>
       <button class="btn" data-act="open"><svg class="ic sm"><use href="#i-play"/></svg>Open</button>`;
     $('.name', li).textContent = r.title + (r.recovered ? ' (recovered)' : '');
     $('.sub', li).textContent = `${fmtDate(r.createdAt)} · ${fmtClock(r.durationSec || 0)} · ${fmtBytes(r.size || 0)}` + (r.cloud ? ' · sent for review ✓' : '');
+    fbDecor(li, r);
     li.addEventListener('click', async e => {
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (act === 'open') openSaved(await getRecording(r.id));
       else if (act === 'download') downloadRec(await getRecording(r.id));
+      else if (act === 'feedback') openFeedback(r);
+      else if (act === 'retry') retryFeedback(r, li, e.target.closest('button'));
       else if (act === 'delete') {
         if (await confirmDlg('Delete this recording? This can’t be undone.', 'Delete')) { await deleteRecording(r.id); renderRecordings(); }
       }
     });
     ul.appendChild(li);
   }
+  refreshFeedback(recs);
+}
+
+// ---------------------------------------------------------------- AI feedback on the preacher's own recordings
+// grade-recording (Edge Function) fills in status/summary/grade_json on the cloud row; RLS lets the
+// preacher read their own rows. We cache the latest result on the local recording so it shows offline too.
+const FB_POLL_MS = 20000, FB_POLL_WINDOW_MS = 45 * 60 * 1000, FB_RETRY_AFTER_MS = 3 * 60 * 1000;
+let fbTimer = 0, fbBusy = false, fbAgain = null;
+const fbLatest = new Map(); // recording id → latest feedback seen this session (lists can re-render mid-refresh)
+const fbOf = r => fbLatest.get(r.id) || r.cloud?.feedback || null;
+
+function fbDecor(li, r) {
+  const slot = $('.fb-slot', li);
+  if (!slot) return;
+  slot.innerHTML = '';
+  if (!r.cloud?.rowId) return;
+  const fb = fbOf(r) || { status: 'uploaded' };
+  const st = feedbackStatus(fb);
+  const pill = document.createElement('span');
+  pill.className = 'fb-pill'; pill.dataset.state = st.state; pill.textContent = st.label;
+  if (st.state === 'error' && fb.status_detail) pill.title = fb.status_detail;
+  slot.appendChild(pill);
+  const btn = (act, label) => { const b = document.createElement('button'); b.className = 'btn sm fb-btn'; b.dataset.act = act; b.textContent = label; slot.appendChild(b); };
+  if (st.state === 'graded') btn('feedback', 'View feedback');
+  const stale = fb.status === 'uploaded' && Date.now() - (r.cloud.at || 0) > FB_RETRY_AFTER_MS;
+  if (st.state === 'error' || stale) btn('retry', 'Retry feedback');
+}
+
+async function refreshFeedback(recs) {
+  clearTimeout(fbTimer);
+  const sent = recs.filter(r => r.cloud?.rowId);
+  if (!sent.length || !canSync()) return;
+  if (fbBusy) { fbAgain = sent; return; }
+  fbBusy = true;
+  try {
+    const rows = await myFeedback(sent.map(r => r.cloud.rowId));
+    for (const row of rows || []) {
+      const r = sent.find(x => x.cloud.rowId === row.id);
+      if (!r) continue;
+      const prev = fbOf(r);
+      const next = { status: row.status, status_detail: row.status_detail ?? null, summary: row.summary ?? null, grade_json: row.grade_json ?? null, notes: row.notes ?? null, graded_at: row.graded_at ?? null };
+      fbLatest.set(r.id, next);
+      if (JSON.stringify(prev) !== JSON.stringify(next)) {
+        r.cloud.feedback = next;
+        const full = await getRecording(r.id);
+        if (full) { full.cloud = Object.assign({}, full.cloud, { feedback: next }); await updateRecording(full); }
+        if (prev && prev.status !== 'graded' && next.status === 'graded') toast(`Your feedback on “${r.title}” is ready.`, 5000);
+      }
+      const li = $(`#recordings li[data-rec="${CSS.escape(r.id)}"]`);
+      if (li) fbDecor(li, r);
+    }
+  } catch (e) { console.warn('feedback refresh failed', e); } finally { fbBusy = false; }
+  if (fbAgain) { const again = fbAgain; fbAgain = null; return refreshFeedback(again); }
+  const waiting = sent.some(r => ['uploaded', 'processing'].includes(fbOf(r)?.status || 'uploaded') && Date.now() - (r.cloud.at || 0) < FB_POLL_WINDOW_MS);
+  if (waiting && currentView === 'home') fbTimer = setTimeout(() => { if (currentView === 'home') refreshFeedback(sent); }, FB_POLL_MS);
+}
+
+async function retryFeedback(r, li, button) {
+  if (button) button.disabled = true;
+  const res = await requestGrading(r.cloud.rowId);
+  if (res.ok) {
+    toast('Feedback is on its way.', 3000);
+    r.cloud.at = Date.now();
+    const cur = fbOf(r);
+    const next = Object.assign({}, cur, { status: res.status === 'processing' ? 'processing' : (cur?.status || 'processing'), status_detail: null });
+    r.cloud.feedback = next; fbLatest.set(r.id, next);
+    fbDecor(li, r);
+    refreshFeedback([r]);
+  } else {
+    toast('Couldn’t start feedback: ' + (res.error || 'try again later'), 4000);
+    if (button) button.disabled = false;
+  }
+}
+
+function openFeedback(r) {
+  const fb = fbOf(r);
+  if (!fb) return;
+  $('#fbk-h').textContent = r.title || 'Your feedback';
+  $('#fbk-meta').textContent = `${fmtDate(r.createdAt)} · ${fmtClock(r.durationSec || 0)}`;
+  const body = $('#fbk-body');
+  body.innerHTML = '';
+  body.appendChild(renderFeedback(fb.grade_json, { summary: fb.summary || '', question: fb.notes || '' }));
+  $('#dlg-feedback').showModal();
 }
 
 // ---------------------------------------------------------------- editor

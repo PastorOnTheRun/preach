@@ -1,15 +1,14 @@
-// Feedback pipeline hook.
+// Feedback pipeline.
 //
-// Phase 1.5 (now): uploads the recording to the private Supabase Storage bucket
-//   `recordings/<user_id>/<sermon_id>/<timestamp>.<ext>` and inserts a `recordings` row
-//   with status 'uploaded'. Jake can listen to it on review.html.
-// Phase 2 (TODO): a Supabase Edge Function `grade-recording` that
-//   1. downloads the audio (service role) and transcribes it with xAI Speech-to-Text
-//      (POST https://api.x.ai/v1/stt, model grok-voice-transcribe-2.0),
-//   2. sends transcript + manuscript to the xAI Grok API for a summary and rubric grade,
-//   3. writes transcript / summary / grade_json, sets status 'graded', and emails Jake.
+// 1. Uploads the recording to the private Supabase Storage bucket
+//    `recordings/<user_id>/<sermon_id>/<timestamp>.<ext>` and inserts a `recordings` row (status 'uploaded').
+// 2. Phase 2: asks the `grade-recording` Edge Function (supabase/functions/grade-recording) to
+//    transcribe it with xAI speech-to-text, grade it with Grok against the pastoral rubric, save
+//    transcript / summary / grade_json on the row and email Jake. The function answers 202 straight
+//    away and works in the background; the preacher sees the grade later in their recordings list.
+//    (An optional database trigger, supabase/grading-trigger.sql, starts the same job server-side.)
 // API keys live only in Edge Function secrets, never in this static site.
-import { isConfigured, initAuth, auth, uploadRecording, getClient } from './cloud.js';
+import { isConfigured, initAuth, auth, uploadRecording, requestGrading } from './cloud.js';
 
 let syncEngine = null;
 /** app.js registers the sync engine so the sermon row exists before we link the recording to it. */
@@ -20,11 +19,11 @@ export function setFeedbackSync(engine) { syncEngine = engine; }
  * @param {Blob} audioBlob  The recorded audio (audio/webm on Chrome/Android, audio/mp4 on Safari/iOS).
  * @param {object} metadata { recordingId, sermonId, sermonTitle, speaker, notes, recordedAt (ISO), durationSec,
  *                            mimeType, timerMinutes, overtimeSec, manuscript (plain text) }
- * @returns {Promise<{ok: boolean, stub?: boolean, needsSignIn?: boolean, message: string, recordingRowId?: string, storagePath?: string}>}
+ * @returns {Promise<{ok: boolean, stub?: boolean, needsSignIn?: boolean, message: string, recordingRowId?: string, storagePath?: string, gradingStarted?: boolean}>}
  */
 export async function sendForFeedback(audioBlob, metadata) {
   if (!isConfigured()) {
-    return { ok: false, stub: true, message: 'Feedback sending isn’t switched on yet (coming in Phase 2, once team accounts are set up). Your recording is saved on this device and can be downloaded.' };
+    return { ok: false, stub: true, message: 'Feedback sending isn’t switched on yet (team accounts aren’t set up in this copy of the app). Your recording is saved on this device and can be downloaded.' };
   }
   await initAuth();
   if (!auth.user) return { ok: false, needsSignIn: true, message: 'Please sign in first, then tap Send again.' };
@@ -36,14 +35,18 @@ export async function sendForFeedback(audioBlob, metadata) {
 
   const { id, path } = await uploadRecording(audioBlob, metadata);
 
-  // TODO(phase 2): kick off transcription + Grok grading + email via an Edge Function, e.g.
-  //   const client = await getClient();
-  //   await client.functions.invoke('grade-recording', { body: { recording_id: id } });
-  // (Or trigger it server-side from a Storage/DB webhook so the app doesn't need to wait.)
-  void getClient;
+  // Kick off transcription + grading. Don't let a slow/failed call hold up the "Sent" message:
+  // the upload is what matters, and grading can be retried from the recordings list.
+  const grading = await Promise.race([
+    requestGrading(id),
+    new Promise(r => setTimeout(() => r({ ok: true, pending: true }), 8000))
+  ]);
 
   return {
-    ok: true, recordingRowId: id, storagePath: path,
-    message: 'Sent! Your recording is uploaded for review. (Automatic AI feedback is coming in Phase 2.)'
+    ok: true, recordingRowId: id, storagePath: path, gradingStarted: !!grading.ok,
+    message: grading.ok
+      ? 'Sent! Feedback is on its way. Your grade will appear in your recordings list in a few minutes.'
+      : 'Sent! Your recording is uploaded. Feedback should follow shortly. If no grade appears in your recordings list, tap “Retry feedback” there.'
   };
 }
+

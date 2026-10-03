@@ -1,10 +1,12 @@
 // Admin review page: every preacher's sermons and recordings (RLS: admins can read all).
 import { $, $$, fmtClock, fmtDate, escapeHtml, toast } from './util.js';
-import { isConfigured, initAuth, auth, isAdmin, admin } from './cloud.js';
+import { isConfigured, initAuth, auth, isAdmin, admin, requestGrading } from './cloud.js';
+import { renderFeedback, isAiGrade, parseGrade } from './grade.js';
 import { sanitizeHtml, wordCount } from './format.js';
 
 let profiles = [], sermons = [], recordings = [];
 let tab = 'recordings';
+let deepLinked = false;
 const byId = id => profiles.find(p => p.id === id);
 const nameOf = id => { const p = byId(id); return p ? (p.display_name || p.email || 'Unknown') : 'Unknown preacher'; };
 
@@ -52,6 +54,20 @@ async function load() {
     .map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.display_name || p.email || p.id)}${p.role === 'admin' ? ' (admin)' : ''}</option>`).join('');
   sel.value = cur;
   render();
+  openDeepLink();
+}
+
+/** review.html?rec=<recording id> (the link in the feedback email) opens that recording. */
+function openDeepLink() {
+  if (deepLinked) return;
+  deepLinked = true;
+  const id = new URLSearchParams(location.search).get('rec');
+  if (!id || !recordings.some(r => r.id === id)) return;
+  if (tab !== 'recordings' || $('#rv-preacher').value) { tab = 'recordings'; $('#rv-preacher').value = ''; render(); }
+  const li = $(`#rv-list li[data-id="${CSS.escape(id)}"]`);
+  if (!li) return;
+  $('.rv-row', li).click();
+  li.scrollIntoView({ block: 'start' });
 }
 
 function render() {
@@ -99,11 +115,15 @@ async function openSermon(id) {
 function recordingItem(r) {
   const li = document.createElement('li');
   li.className = 'rv-item';
+  li.dataset.id = r.id;
   li.innerHTML = `<button class="rv-row" aria-expanded="false"><div class="grow"><div class="rv-title"></div><div class="rv-sub"></div></div><span class="status-badge"></span></button>`;
   $('.rv-title', li).textContent = r.sermon_title || 'Sermon recording';
   const over = r.overtime_seconds > 0 ? ` · <span class="rv-over">+${fmtClock(r.overtime_seconds)} over</span>` : '';
   $('.rv-sub', li).innerHTML = `${escapeHtml(nameOf(r.user_id))} · ${escapeHtml(fmtDate(r.created_at))} · ${fmtClock(r.duration || 0)}${r.timer_minutes ? ` of ${r.timer_minutes} min` : ''}${over}`;
-  const badge = $('.status-badge', li); badge.textContent = r.status || 'uploaded'; badge.dataset.s = r.status || 'uploaded';
+  const badge = $('.status-badge', li); badge.dataset.s = r.status || 'uploaded';
+  const overall = r.status === 'graded' ? parseGrade(r.grade_json)?.overall : null;
+  badge.textContent = (r.status || 'uploaded') + (overall ? ` · ${overall}` : '');
+  if (r.status_detail) badge.title = r.status_detail;
   const row = $('.rv-row', li);
   row.addEventListener('click', () => {
     const open = row.getAttribute('aria-expanded') === 'true';
@@ -130,7 +150,7 @@ function gradeBlock(g) {
   const sec = document.createElement('section');
   sec.innerHTML = '<h4>Grade</h4>';
   if (!g || (typeof g === 'object' && !Object.keys(g).length)) {
-    sec.insertAdjacentHTML('beforeend', '<div class="rv-empty">Not graded yet (Phase 2).</div>'); return sec;
+    sec.insertAdjacentHTML('beforeend', '<div class="rv-empty">Not graded yet.</div>'); return sec;
   }
   if (typeof g === 'string') { try { g = JSON.parse(g); } catch { sec.appendChild(textBlock('', g, '')); return sec; } }
   const overall = g.overall ?? g.grade ?? g.score ?? g.overall_grade;
@@ -164,15 +184,51 @@ function recordingDetail(r) {
     player.appendChild(a);
   }).catch(e => { player.innerHTML = '<h4>Recording</h4>'; player.insertAdjacentText('beforeend', 'Couldn’t load audio: ' + e.message); });
   if (r.notes) d.appendChild(textBlock('Preacher’s question', r.notes, ''));
-  d.appendChild(textBlock('Summary', r.summary, 'No summary yet (Phase 2).'));
-  d.appendChild(gradeBlock(r.grade_json));
-  d.appendChild(textBlock('Transcript', r.transcript, 'No transcript yet (Phase 2).'));
+  d.appendChild(aiControls(r));
+  const g = parseGrade(r.grade_json);
+  if (isAiGrade(g)) {
+    const sec = document.createElement('section'); sec.className = 'rv-ai';
+    sec.innerHTML = '<h4>AI feedback</h4>';
+    sec.appendChild(renderFeedback(g, { summary: r.summary || '', question: r.notes || '' }));
+    d.appendChild(sec);
+  } else {
+    d.appendChild(textBlock('Summary', r.summary, 'No summary yet.'));
+    d.appendChild(gradeBlock(r.grade_json));
+  }
+  d.appendChild(textBlock('Transcript', r.transcript, 'No transcript yet.'));
   if (r.sermon_id && sermons.some(s => s.id === r.sermon_id)) {
     const b = document.createElement('button'); b.className = 'btn'; b.innerHTML = '<svg class="ic sm"><use href="#i-book"/></svg>Open sermon manuscript';
     b.addEventListener('click', () => openSermon(r.sermon_id));
     d.appendChild(b);
   }
   return d;
+}
+
+/** Status line + Run / Re-run AI feedback (admins can force a re-grade; the function enforces this too). */
+function aiControls(r) {
+  const sec = document.createElement('section');
+  sec.className = 'rv-ai-controls';
+  const st = r.status || 'uploaded';
+  const note = document.createElement('p'); note.className = 'rv-detail-note';
+  note.textContent = st === 'graded' ? `AI feedback ready${r.graded_at ? ' · ' + fmtDate(r.graded_at) : ''}${r.status_detail ? ' · ' + r.status_detail : ''}`
+    : st === 'processing' ? `AI feedback in progress${r.status_detail ? ' (' + r.status_detail + ')' : ''}…`
+    : st === 'error' ? `AI feedback failed: ${r.status_detail || 'unknown error'}`
+    : 'Waiting for AI feedback.';
+  const b = document.createElement('button'); b.className = 'btn sm'; b.dataset.act = 'grade';
+  b.textContent = st === 'graded' ? 'Re-run AI feedback' : st === 'processing' ? 'Grading…' : 'Run AI feedback';
+  b.disabled = st === 'processing';
+  b.addEventListener('click', async ev => {
+    ev.stopPropagation();
+    b.disabled = true;
+    const res = await requestGrading(r.id, { force: st === 'graded' || st === 'processing' });
+    if (!res.ok) { toast('Couldn’t start AI feedback: ' + (res.error || 'unknown error'), 5000); b.disabled = false; return; }
+    toast(res.message || 'Feedback is on its way.', 3000);
+    r.status = res.status || 'processing'; r.status_detail = null;
+    note.textContent = 'AI feedback in progress… (refresh in a minute or two)';
+    b.textContent = 'Grading…';
+  });
+  sec.append(note, b);
+  return sec;
 }
 
 $('#rv-preacher').addEventListener('change', render);

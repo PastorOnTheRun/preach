@@ -605,3 +605,27 @@ dialog::backdrop { background: rgba(20, 17, 16, .55); }
 @media (max-width: 380px) { .timer-pill { min-width: 84px; font-size: 16px; } }
 @media (max-width: 900px) { #preach .rec-btn .lbl { display: none; } }
 @media (max-width: 380px) { .pbar.top .icon-btn { width: 42px; } .pbar.top .rec-btn { padding: 0 9px; margin-right: 0; } .timer-pill { min-width: 78px; padding: 0 6px; } }
+
+/* ---------- AI feedback view (js/grade.js) — app dialog + review page ---------- */
+.fb-view section { margin-top: 16px; }
+.fb-view h4 { margin: 0 0 6px; font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.fb-head { display: flex; align-items: center; gap: 16px; }
+.fb-head .grade-overall { background: var(--black); color: var(--accent); border-radius: 4px; padding: 10px 14px; min-width: 64px; text-align: center; }
+.fb-meta { color: var(--muted); font-size: 14px; line-height: 1.5; }
+.fb-avg { font-family: var(--mono); font-weight: 700; color: var(--text); }
+.fb-text { margin: 0; line-height: 1.55; white-space: pre-wrap; }
+.fb-score { font-family: var(--mono); font-weight: 800; color: var(--accent); white-space: nowrap; }
+.fb-area { font-weight: 700; min-width: 8em; }
+.fb-notes { color: var(--muted); }
+.fb-list { margin: 0; padding-left: 20px; line-height: 1.5; }
+.fb-list li { margin: 4px 0; }
+.fb-question { margin: 0 0 6px; font-style: italic; color: var(--muted); }
+.fb-foot { margin-top: 18px; font-size: 12px; color: var(--muted); }
+.fb-pill { display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin-left: 6px; vertical-align: 1px; background: var(--surface-2); color: var(--muted); }
+.fb-pill[data-state="graded"] { background: var(--black); color: var(--accent); }
+.fb-pill[data-state="error"] { background: color-mix(in srgb, var(--danger) 18%, var(--surface)); color: var(--danger); }
+.rv-detail-note { font-size: 14px; color: var(--muted); margin: 6px 0 0; }
+.fb-slot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.fb-slot:empty { display: none; }
+.fb-slot .fb-pill { margin-left: 0; }
+.btn.sm { min-height: 32px; padding: 4px 10px; font-size: 13px; }

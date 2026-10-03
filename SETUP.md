@@ -60,7 +60,7 @@ To use it: open `https://pastorontherun.github.io/preach/screen.html` on the pro
 ## 6. Quick test
 - [ ] On a second device or browser, sign in as a test preacher, add a sermon, and preach a few pages.
 - [ ] Sign in on another device with the same account. The sermon, timer and last page show up within about a minute (or tap the account button → **Sync now**).
-- [ ] Record a short test and tap **Send for feedback**. It should say "Sent!"
+- [ ] Record a short test and tap **Send for feedback**. It should say "Sent! Feedback is on its way."
 - [ ] Open `review.html` as Jake. The sermon and recording are listed, the audio plays, and filtering by preacher works.
 - [ ] In airplane mode the app still opens and preaches. Changes sync once you're back online.
 
@@ -69,5 +69,65 @@ To use it: open `https://pastorontherun.github.io/preach/screen.html` on the pro
 - **Free plan:** files up to 50 MB (about 90 minutes of audio), and the project pauses after a week with no activity. Restore it from the dashboard, or use the Pro plan for a live ministry.
 - **Removing a preacher:** Authentication → Users → delete. Their sermons and recordings rows are deleted too. Remove their files in Storage → recordings → their folder.
 
-## Phase 2 (not built yet)
-An Edge Function `grade-recording` will transcribe each recording, ask Grok for a summary and grade, fill in `transcript`, `summary`, `grade_json`, set `status = 'graded'`, and email you. The review page already shows those fields once they exist. See the notes at the bottom of `supabase/schema.sql`.
+## 7. Phase 2: automatic AI feedback
+When a preacher taps **Send for feedback**, the app uploads the recording and calls the Edge Function
+`grade-recording` (in `supabase/functions/grade-recording/`). The function:
+1. checks the caller owns the recording (or is an admin), marks it `processing`, and replies **202** straight away;
+2. in the background, gives xAI speech-to-text (`POST https://api.x.ai/v1/stt`, model `grok-voice-transcribe-2.0`)
+   a 1-hour signed link to the audio in the private `recordings` bucket (falls back to uploading the file);
+3. hands off to a second run of itself, which sends the transcript, manuscript, timing (planned/actual/overtime,
+   words per minute) and the preacher's question to Grok (`POST https://api.x.ai/v1/chat/completions`,
+   model `grok-4.7`, strict JSON schema) with a fixed pastoral rubric;
+4. saves `transcript`, `summary`, `grade_json`, sets `status = 'graded'` (or `error` with the reason in `status_detail`);
+5. emails you the results through Resend (grade table, summary, strengths, growth areas, link to `review.html`).
+
+The preacher sees **Feedback on its way…** and then **Grade B+ · View feedback** in their recordings list.
+On `review.html` you see the full feedback and a **Run / Re-run AI feedback** button.
+
+### What you need
+- **xAI API key**: console.x.ai → API Keys. Cost is about $0.10 per hour of audio for transcription plus a few cents per sermon for grading.
+- **Resend API key**: resend.com → sign up → API Keys → *Sending access*. Without a verified domain, Resend only
+  delivers from `onboarding@resend.dev` **to the email address you signed up with**, so use that address as `FEEDBACK_EMAIL`.
+  (Later: verify your church domain in Resend and set `FROM_EMAIL`, e.g. `Preach <feedback@yourchurch.org>`.)
+- **Supabase CLI**: `brew install supabase/tap/supabase` (Mac) or `npx supabase …`.
+
+### Steps (from the repo root, the folder containing `supabase/config.toml`)
+1. Re-run **`supabase/schema.sql`** in the SQL editor (safe to re-run; it adds `status_detail`, `processing_started_at`, `graded_at`).
+2. Deploy:
+   ```bash
+   supabase login                                    # opens the browser once
+   supabase link --project-ref bpndhidtxzgjxmrgffyp  # press Enter if asked for the database password
+   WEBHOOK_SECRET=$(openssl rand -hex 24); echo "$WEBHOOK_SECRET"   # keep this for step 3
+   supabase secrets set XAI_API_KEY=xai-... RESEND_API_KEY=re_... FEEDBACK_EMAIL=you@example.com WEBHOOK_SECRET=$WEBHOOK_SECRET
+   # optional: supabase secrets set FROM_EMAIL='Preach <feedback@yourchurch.org>'
+   supabase functions deploy grade-recording --no-verify-jwt --use-api
+   ```
+   `--no-verify-jwt` is intended (it's also set in `supabase/config.toml`): the function checks every caller itself
+   (signed-in user via `auth.getUser` + ownership, database trigger via `WEBHOOK_SECRET`, or the service key for its own hand-off).
+3. *(Recommended backup trigger)* In the SQL editor run, with your secret from step 2:
+   ```sql
+   select vault.create_secret('https://bpndhidtxzgjxmrgffyp.supabase.co/functions/v1/grade-recording', 'grade_recording_url');
+   select vault.create_secret('PASTE-WEBHOOK_SECRET', 'grade_recording_secret');
+   ```
+   then run **`supabase/grading-trigger.sql`**. Now grading also starts from the database if the phone drops off right after uploading.
+   The function makes sure only one run grades each recording.
+4. Test: record 30 seconds, **Send for feedback**, wait 1–3 minutes. Check the email, the recordings list and `review.html`.
+   If something fails, the reason is on the review page (and in Dashboard → Edge Functions → grade-recording → Logs).
+
+### Optional settings (secrets)
+| Secret | Default | Use |
+| --- | --- | --- |
+| `FROM_EMAIL` | `Preach <onboarding@resend.dev>` | Sender once your domain is verified in Resend |
+| `FEEDBACK_EMAIL` | (required for email) | Comma-separate several recipients (verified domain needed for non-owner addresses) |
+| `XAI_MODEL` | `grok-4.7` | Grok model for grading |
+| `XAI_REASONING_EFFORT` | `medium` | `low` / `medium` / `high` / `none` (faster vs deeper) |
+| `XAI_STT_MODEL` | `grok-voice-transcribe-2.0` | Speech-to-text model |
+| `REVIEW_URL` | `https://pastorontherun.github.io/preach/review.html` | Link in the email |
+| `FEEDBACK_TIMEZONE` | `America/New_York` | Date shown in the email |
+
+### Limits
+Edge Functions have a wall-clock limit per run of **150 s on the Free plan (400 s on paid)**, and background work started
+with `EdgeRuntime.waitUntil` must finish inside it. That's why transcription and grading run in **separate** invocations,
+each with its own budget. A long sermon normally transcribes well within that, but if a run is killed the recording
+stays `processing`; after 15 minutes anyone can tap **Retry feedback** (preacher) or **Run AI feedback** (you), and an
+existing transcript is reused. Recordings are capped at 50 MB by the bucket (~90 min); xAI accepts up to 500 MB.

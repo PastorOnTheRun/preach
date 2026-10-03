@@ -175,11 +175,34 @@ export async function uploadRecording(blob, meta) {
   return { id: res.data.id, path };
 }
 
+// ------------------------------------------------------------------ Phase 2: AI feedback
+/**
+ * Ask the `grade-recording` Edge Function to transcribe + grade a recording (it replies 202 at once and
+ * works in the background). Never throws: grading can also be started by the database trigger or retried.
+ * @returns {Promise<{ok: boolean, status?: string, message?: string, error?: string}>}
+ */
+export async function requestGrading(recordingRowId, { force = false } = {}) {
+  try {
+    const client = await getClient();
+    if (!client || !auth.user) return { ok: false, error: 'not signed in' };
+    const body = { recording_id: recordingRowId };
+    if (force) body.force = true;
+    const { data, error } = await client.functions.invoke('grade-recording', { body });
+    if (error) return { ok: false, error: friendly(error) };
+    return { ok: true, status: data?.status, message: data?.message };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
+/** The signed-in preacher's own recording rows (RLS: own rows only, admins see all). */
+export const myFeedback = ids => ids.length
+  ? call(c => c.from('recordings').select('id, local_id, status, status_detail, summary, grade_json, notes, graded_at').in('id', ids))
+  : Promise.resolve([]);
+
 // ------------------------------------------------------------------ admin (RLS enforces access server-side)
 export const admin = {
   profiles: () => call(c => c.from('profiles').select('id, email, display_name, role, created_at').order('display_name', { ascending: true })),
   sermons: () => call(c => c.from('sermons').select('id, user_id, title, timer_settings, updated_at, created_at').eq('deleted', false).order('updated_at', { ascending: false }).limit(500)),
   sermon: id => call(c => c.from('sermons').select('id, user_id, title, content_html, timer_settings, updated_at').eq('id', id).single()),
-  recordings: () => call(c => c.from('recordings').select('id, user_id, sermon_id, sermon_title, speaker, notes, storage_path, mime_type, duration, overtime_seconds, timer_minutes, created_at, status, transcript, summary, grade_json').order('created_at', { ascending: false }).limit(500)),
+  recordings: () => call(c => c.from('recordings').select('id, user_id, sermon_id, sermon_title, speaker, notes, storage_path, mime_type, duration, overtime_seconds, timer_minutes, created_at, status, status_detail, graded_at, transcript, summary, grade_json').order('created_at', { ascending: false }).limit(500)),
   signedUrl: async path => (await call(c => c.storage.from(BUCKET).createSignedUrl(path, 60 * 60))).signedUrl
 };

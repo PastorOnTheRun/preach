@@ -39,6 +39,10 @@ with sync_playwright() as p:
     browser = p.chromium.launch(args=['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'])
     ctx = local_only(browser.new_context(viewport={'width': 1180, 'height': 820}, device_scale_factor=2, has_touch=False, permissions=['microphone', 'clipboard-read', 'clipboard-write']))
     pg = ctx.new_page()
+    # v1.2.1 builds in a team API.Bible key, so the app would prefetch real passages over the network and the
+    # session cache would hide the invalid-key case below. Keep API.Bible offline (403) for this suite.
+    pg.route('https://rest.api.bible/**', lambda route: route.fulfill(status=403, content_type='application/json',
+        headers={'access-control-allow-origin': '*'}, body='{"statusCode": 403, "error": "Forbidden", "message": "Invalid API key"}'))
     errors = []
     pg.on('pageerror', lambda e: errors.append(str(e)))
     pg.on('console', lambda m: errors.append(m.text) if m.type == 'error' and 'api.bible' not in m.text and '403' not in m.text else None)
@@ -194,8 +198,8 @@ with sync_playwright() as p:
     meta = pg.inner_text('#saved-meta')
     check('saved recording has audio', ('KB' in meta or 'MB' in meta), meta)
     pg.fill('#fb-name', 'Jake Labrador'); pg.fill('#fb-notes', 'Was the intro too long?')
-    pg.click('#fb-send'); pg.wait_for_function("document.getElementById('fb-status').textContent.includes('Phase 2')", timeout=5000)
-    check('Send for feedback calls stub', 'Phase 2' in pg.inner_text('#fb-status'))
+    pg.click('#fb-send'); pg.wait_for_function("document.getElementById('fb-status').textContent.includes('switched on')", timeout=5000)
+    check('Send for feedback calls stub', 'switched on' in pg.inner_text('#fb-status'))
     pg.screenshot(path=str(SHOTS / '08-recording-saved-feedback.png'))
     pg.click('#dlg-saved .dlg-head [data-close]')
     # Record-with-timer option

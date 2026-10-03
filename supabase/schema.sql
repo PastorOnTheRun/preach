@@ -195,14 +195,17 @@ create policy "recordings_delete_own_folder" on storage.objects
   using (bucket_id = 'recordings' and (storage.foldername(name))[1] = auth.uid()::text);
 
 -- ---------------------------------------------------------------------
--- PHASE 2 (TODO, not created here): Edge Function `grade-recording`
---   Trigger: app calls supabase.functions.invoke('grade-recording', { body: { recording_id } })
---            or a Database Webhook on INSERT into public.recordings.
---   Steps:  set status='processing' → download audio with the service role key →
---           xAI STT (POST https://api.x.ai/v1/stt) → Grok summary + rubric grade →
---           update transcript/summary/grade_json, status='graded' → email Jake (Resend/Postmark).
---   Secrets: XAI_API_KEY, RESEND_API_KEY (supabase secrets set ...).
+-- PHASE 2: automatic AI feedback (Edge Function `grade-recording`, see SETUP.md).
+--   The function (service role) moves status uploaded → processing → graded | error and
+--   writes transcript / summary / grade_json plus the columns below. Preachers can read
+--   them (select grant above) but can't write them (not in the insert/update column grants).
+--   Safe to re-run.
 -- ---------------------------------------------------------------------
+alter table public.recordings add column if not exists status_detail         text;        -- progress ("transcribing", "grading") or the error message
+alter table public.recordings add column if not exists processing_started_at timestamptz; -- lets a stuck job be retried after 15 min
+alter table public.recordings add column if not exists graded_at             timestamptz;
+-- Optional server-side trigger (Database Webhook) that also starts grading on every new
+-- recording, even if the app is closed straight after uploading: supabase/grading-trigger.sql
 
 -- After Jake signs in once, make him an admin (run separately):
 --   update public.profiles set role = 'admin' where email = 'jake@YOUR-DOMAIN';
