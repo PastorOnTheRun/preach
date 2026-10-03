@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b7a6e"/><stop offset="1" stop-color="#1b4d46"/></linearGradient></defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <!-- open book -->
+  <path d="M96 168c52-14 104-10 152 18v206c-48-26-100-30-152-18z" fill="#f6f4ef"/>
+  <path d="M416 168c-52-14-104-10-152 18v206c48-26 100-30 152-18z" fill="#e6e1d6"/>
+  <!-- timer arc -->
+  <circle cx="256" cy="120" r="44" fill="none" stroke="#f4c430" stroke-width="16" stroke-linecap="round" stroke-dasharray="200 300" transform="rotate(-90 256 120)"/>
+  <path d="M256 120v-22" stroke="#f6f4ef" stroke-width="12" stroke-linecap="round"/>
+  <path d="M132 222h82M132 256h82M132 290h60M298 222h82M298 256h82M298 290h64" stroke="#1b4d46" stroke-width="10" stroke-linecap="round" opacity=".35"/>
+</svg>

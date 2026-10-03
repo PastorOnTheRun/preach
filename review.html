@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Review · Preach</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#f6f4ef">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script>
+    try { var s = JSON.parse(localStorage.getItem('preach.v1.settings') || '{}');
+      document.documentElement.dataset.theme = s.theme || 'light'; document.documentElement.dataset.font = s.font || 'serif'; } catch (e) {}
+  </script>
+  <script src="config.js"></script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+</svg>
+<div class="wrap" style="max-width:1040px">
+  <header class="review-head">
+    <div class="brand">
+      <img src="icons/icon.svg" alt="">
+      <div><h1>Review</h1><p id="rv-who">Family Church · Teaching Team</p></div>
+    </div>
+    <a class="btn" href="./"><svg class="ic sm"><use href="#i-back"/></svg>Back to Preach</a>
+  </header>
+
+  <div id="rv-msg" class="card review-msg" hidden></div>
+
+  <div id="rv-main" hidden>
+    <div class="review-tools">
+      <select id="rv-preacher" class="select" aria-label="Filter by preacher"><option value="">All preachers</option></select>
+      <div class="segmented" id="rv-tabs" role="tablist">
+        <button data-tab="recordings" aria-pressed="true">Recordings <span id="rv-nrec"></span></button>
+        <button data-tab="sermons" aria-pressed="false">Sermons <span id="rv-nser"></span></button>
+      </div>
+      <button class="btn ghost" id="rv-refresh"><svg class="ic sm"><use href="#i-reset"/></svg>Refresh</button>
+    </div>
+    <ul class="list" id="rv-list"></ul>
+    <p class="empty" id="rv-empty" hidden>Nothing here yet.</p>
+  </div>
+</div>
+
+<dialog id="dlg-sermon" aria-labelledby="sv-title">
+  <div class="dlg">
+    <div class="dlg-head"><div><h2 id="sv-title"></h2><div class="muted" id="sv-meta"></div></div><button class="icon-btn" data-close aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><div id="sv-body" class="reading"></div></div>
+  </div>
+</dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="js/review.js"></script>
+</body>
+</html>
