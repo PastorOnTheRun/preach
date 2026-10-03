@@ -1,6 +1,6 @@
 // Preach service worker: precache the app shell so it works offline (e.g. spotty church Wi-Fi).
 // Bump VERSION on every release so devices pick up the new files.
-const VERSION = 'preach-v1.2.0';
+const VERSION = 'preach-v1.2.1';
 const SHELL = [
   './', 'index.html', 'config.js', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/util.js', 'js/storage.js', 'js/format.js', 'js/bible.js', 'js/paginator.js',
@@ -32,6 +32,10 @@ self.addEventListener('fetch', e => {
     const cache = await caches.open(VERSION);
     // Navigations to the app root map to index.html; review.html etc. match themselves.
     const key = req.mode === 'navigate' && url.pathname.endsWith('/') ? 'index.html' : req;
+    if (url.pathname.endsWith('/config.js')) {
+      try { const r = await fetch(req); if (r && r.ok) { cache.put(key, r.clone()); return r; } } catch (_) {}
+      return (await cache.match(key)) || new Response('', { status: 503 });
+    }
     const cached = await cache.match(key, { ignoreSearch: req.mode === 'navigate' });
     const network = fetch(req).then(res => {
       if (res && res.ok && res.type === 'basic') cache.put(key, res.clone());

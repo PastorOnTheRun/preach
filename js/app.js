@@ -13,7 +13,7 @@ import { SAMPLE_TITLE, SAMPLE_MD } from './sample.js';
 import { extractSlides, publicSlide, verseSlide } from './slides.js';
 import { ScreenLink, newCode, validCode, screenAvailable } from './screenlink.js';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.2.1';
 const FONT_SIZES = [18, 20, 22, 24, 26, 28, 30, 33, 36, 40, 44, 48, 54, 60, 68, 76];
 const PRESETS = [20, 25, 30, 35, 40];
 const WPM = 130; // typical preaching pace, for the length estimate
@@ -572,7 +572,8 @@ $('#fb-send').addEventListener('click', async () => {
 });
 
 // ---------------------------------------------------------------- verse popup
-function apiKey() { return (settings.apiBibleKey || (window.PREACH_CONFIG && window.PREACH_CONFIG.apiBibleKey) || '').trim(); }
+const TEAM_BIBLE_KEY = 'EKJqZ9D2Ekpn3IyUm1Cav'; // built-in team API.Bible key (CSB)
+function apiKey() { return (settings.apiBibleKey || (window.PREACH_CONFIG && window.PREACH_CONFIG.apiBibleKey) || TEAM_BIBLE_KEY).trim(); }
 let verseReq = 0;
 async function openVerse(ref) {
   const label = refLabel(ref);
@@ -585,7 +586,7 @@ async function openVerse(ref) {
   const key = apiKey();
   if (!key) {
     body.innerHTML = `<p class="verse-msg">Tap <b>Open on BibleGateway</b> to read ${escapeHtml(label)} in the CSB.</p>
-      <p class="muted" style="font-size:15px">Tip: add a free API.Bible key in Settings to show CSB verses right here, without leaving the app.</p>`;
+      <p class="muted" style="font-size:15px">Couldn’t load the verse text right now.</p>`;
     return;
   }
   const my = ++verseReq;
