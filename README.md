@@ -1,4 +1,4 @@
-# Preach — sermon delivery app (v1.3)
+# Preach — sermon delivery app (v1.4)
 
 A calm, offline-capable **preaching mode** for the Family Church (Windermere, FL) student teaching team.
 Static PWA: plain HTML/CSS/vanilla JS (ES modules), no build step, no backend. Ready for GitHub Pages.
@@ -78,6 +78,7 @@ vendor/supabase.js      supabase-js 2.117.2 (UMD, MIT)
 supabase/schema.sql     tables, RLS, storage bucket + policies, signup trigger
 supabase/functions/grade-recording/  Edge Function: xAI STT → Grok rubric grade → save → Resend email (Deno, tests in pipeline_test.ts)
 supabase/grading-trigger.sql         optional DB trigger that also starts grading on insert
+supabase/team-invite.sql             team invite code for sign-ups (private table, Before User Created hook, admin RPC)
 supabase/config.toml    CLI config (grade-recording: verify_jwt = false; it authenticates callers itself)
 SETUP.md                step-by-step Supabase setup for Jake
 tests/accounts_e2e.py   Playwright tests with a mocked Supabase (tests/mock-supabase.js)

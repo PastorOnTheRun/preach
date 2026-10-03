@@ -14,7 +14,7 @@ import { SAMPLE_TITLE, SAMPLE_MD } from './sample.js';
 import { extractSlides, publicSlide, verseSlide } from './slides.js';
 import { ScreenLink, newCode, validCode, screenAvailable } from './screenlink.js';
 
-export const VERSION = '1.3.1';
+export const VERSION = '1.4.0';
 const FONT_SIZES = [18, 20, 22, 24, 26, 28, 30, 33, 36, 40, 44, 48, 54, 60, 68, 76];
 const PRESETS = [20, 25, 30, 35, 40];
 const WPM = 130; // typical preaching pace, for the length estimate
@@ -958,9 +958,9 @@ let siEmail = '';
 let siCodeType = 'email'; // 'signup' after creating a password account that needs confirming
 let returnView = 'home';
 function siStep(step) {
-  ['si-email-form', 'si-pw-form', 'si-sent'].forEach(id => { $('#' + id).hidden = id !== step; });
-  $('#si-title').textContent = step === 'si-sent' ? 'Enter your code' : 'Sign in';
-  $('#si-sub').hidden = step === 'si-sent';
+  ['si-email-form', 'si-pw-form', 'si-signup-form', 'si-sent'].forEach(id => { $('#' + id).hidden = id !== step; });
+  $('#si-title').textContent = step === 'si-sent' ? 'Enter your code' : step === 'si-signup-form' ? 'Create an account' : 'Sign in';
+  $('#si-sub').hidden = step === 'si-sent' || step === 'si-signup-form';
   siStatus('');
 }
 function siStatus(msg, kind = '') { const el = $('#si-status'); el.textContent = msg; el.className = 'status-line si-status ' + kind; }
@@ -1024,11 +1024,31 @@ $('#si-pw-form').addEventListener('submit', e => {
   e.preventDefault();
   busy($('#si-pw-signin'), async () => { siStatus('Signing in…'); await signInPassword($('#si-pw-email').value.trim(), $('#si-pw').value); });
 });
-$('#si-pw-create').addEventListener('click', e => {
-  const email = $('#si-pw-email').value.trim(), pw = $('#si-pw').value;
-  if (!email || pw.length < 8) { siStatus('Enter your email and a password of at least 8 characters.', 'err'); return; }
-  busy(e.currentTarget, async () => {
-    const data = await signUpPassword(email, pw);
+// Create an account (no email needed: auto-confirmed, gated by the team invite code server-side)
+function openSignUp(email = '') {
+  siStep('si-signup-form');
+  if (email) $('#su-email').value = email;
+  if (!$('#su-name').value && settings.speakerName) $('#su-name').value = settings.speakerName;
+  $('#signin').scrollTop = 0; window.scrollTo(0, 0);
+  setTimeout(() => $($('#su-name').value ? '#su-email' : '#su-name').focus(), 60);
+}
+$('#si-to-signup').addEventListener('click', () => openSignUp($('#si-email').value.trim()));
+$('#si-pw-create').addEventListener('click', () => openSignUp($('#si-pw-email').value.trim()));
+$('#su-have').addEventListener('click', () => { siStep('si-email-form'); if ($('#su-email').value) $('#si-email').value = $('#su-email').value; });
+$('#si-signup-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('#su-name').value.trim(), email = $('#su-email').value.trim(), pw = $('#su-pw').value, pw2 = $('#su-pw2').value, code = $('#su-code').value.trim();
+  const bad = (msg, field) => { siStatus(msg, 'err'); $(field).focus(); };
+  if (!name) return bad('Please enter your name.', '#su-name');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return bad('Please enter a valid email address.', '#su-email');
+  if (pw.length < 8) return bad('Choose a password with at least 8 characters.', '#su-pw');
+  if (pw !== pw2) return bad('The two passwords don’t match.', '#su-pw2');
+  if (!code) return bad('Enter the team invite code (ask Jake).', '#su-code');
+  busy($('#su-create'), async () => {
+    siStatus('Creating your account…');
+    const data = await signUpPassword(email, pw, { displayName: name, inviteCode: code });
+    if (!settings.speakerName) { settings.speakerName = name; saveSettings(); }
+    $('#su-pw').value = $('#su-pw2').value = '';
     if (!data || !data.session) { showCodeStep(email, 'signup'); siStatus('Almost done! Type the 6-digit code we emailed to confirm your account.', 'ok'); }
   });
 });

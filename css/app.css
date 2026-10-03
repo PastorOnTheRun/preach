@@ -639,3 +639,15 @@ dialog::backdrop { background: rgba(20, 17, 16, .55); }
 .acct-out { display: grid; gap: 8px; }
 .acct-out .label { margin-bottom: 2px; }
 .acct-out .help { margin: -2px 0 6px; font-size: 13px; color: var(--muted); }
+
+/* ---------- create an account (v1.4) ---------- */
+.si-or { display: flex; align-items: center; gap: 12px; margin: 10px 0 0; color: var(--muted); font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.si-or::before, .si-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.si-label-note { font-family: inherit; text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--muted); }
+.si-invite { font-family: var(--mono); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.si-invite::placeholder { text-transform: none; letter-spacing: .12em; font-weight: 500; }
+.rv-invite { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+.rv-invite code { font-family: var(--mono); font-weight: 800; font-size: 16px; letter-spacing: .1em; color: var(--text); background: var(--surface-2); padding: 4px 10px; border-radius: 3px; }
+.rv-invite { padding: 14px 18px; margin-bottom: 14px; }
+.rv-invite-help { flex-basis: 100%; font-size: 13px; }
+.rv-invite .rv-sql { font-size: 12px; font-weight: 600; letter-spacing: 0; padding: 2px 6px; word-break: break-all; }

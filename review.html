@@ -39,6 +39,12 @@
   <div id="rv-msg" class="card review-msg" hidden></div>
 
   <div id="rv-main" hidden>
+    <div class="card rv-invite" id="rv-invite" hidden>
+      <span>Team invite code for new accounts:</span> <code id="rv-invite-code"></code>
+      <button class="btn sm" id="rv-invite-copy" type="button">Copy</button>
+      <span class="rv-invite-help">Share it with your preachers. To change it, run in the Supabase SQL editor:
+        <code class="rv-sql">update private.app_settings set value = 'NEW-CODE' where key = 'invite_code';</code></span>
+    </div>
     <div class="review-tools">
       <select id="rv-preacher" class="select" aria-label="Filter by preacher"><option value="">All preachers</option></select>
       <div class="segmented" id="rv-tabs" role="tablist">

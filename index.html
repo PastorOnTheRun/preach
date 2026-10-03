@@ -127,6 +127,8 @@
         <button class="btn primary xl block" type="submit" id="si-send"><svg class="ic"><use href="#i-mail"/></svg>Email me a sign-in code</button>
         <p class="si-hint">We’ll email you a 6-digit code to type in here. Works great on a shared iPad.</p>
         <button class="btn ghost block" type="button" id="si-use-pw">Use a password instead</button>
+        <div class="si-or"><span>New to Preach?</span></div>
+        <button class="btn block xl" type="button" id="si-to-signup"><svg class="ic"><use href="#i-user"/></svg>Create an account</button>
       </form>
 
       <form id="si-pw-form" class="si-step" hidden autocomplete="on">
@@ -135,8 +137,24 @@
         <label for="si-pw" class="si-label">Password</label>
         <input id="si-pw" class="si-input" type="password" autocomplete="current-password" minlength="8" required>
         <button class="btn primary xl block" type="submit" id="si-pw-signin">Sign in</button>
-        <button class="btn block" type="button" id="si-pw-create">Create an account</button>
+        <button class="btn block" type="button" id="si-pw-create">New here? Create an account</button>
         <button class="btn ghost block" type="button" id="si-use-link">Email me a code instead</button>
+      </form>
+
+      <form id="si-signup-form" class="si-step" hidden autocomplete="on" novalidate>
+        <label for="su-name" class="si-label">Your name</label>
+        <input id="su-name" class="si-input" type="text" autocomplete="name" autocapitalize="words" placeholder="e.g. Chris Park" required>
+        <label for="su-email" class="si-label">Email</label>
+        <input id="su-email" class="si-input" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@familychurch.org" required>
+        <label for="su-pw" class="si-label">Password <span class="si-label-note">(at least 8 characters)</span></label>
+        <input id="su-pw" class="si-input" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="su-pw2" class="si-label">Confirm password</label>
+        <input id="su-pw2" class="si-input" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="su-code" class="si-label">Team invite code</label>
+        <input id="su-code" class="si-input si-invite" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="WORD-1234" required>
+        <p class="si-hint">Ask Jake for the team invite code. No email needed: you’ll be signed straight in.</p>
+        <button class="btn primary xl block" type="submit" id="su-create">Create my account</button>
+        <button class="btn ghost block" type="button" id="su-have">I already have an account</button>
       </form>
 
       <form id="si-sent" class="si-step" hidden autocomplete="off">

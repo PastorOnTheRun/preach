@@ -35,7 +35,21 @@ async function start() {
   $('#rv-who').textContent = 'Signed in as ' + auth.user.email;
   $('#rv-msg').hidden = true;
   $('#rv-main').hidden = false;
+  showInviteCode();
   await load();
+}
+
+/** Admin-only: current team invite code (security-definer RPC get_invite_code). */
+async function showInviteCode() {
+  try {
+    const code = await admin.inviteCode();
+    if (!code) return;
+    $('#rv-invite-code').textContent = code;
+    $('#rv-invite').hidden = false;
+    $('#rv-invite-copy').onclick = async () => {
+      try { await navigator.clipboard.writeText(code); toast('Invite code copied'); } catch { toast(code, 4000); }
+    };
+  } catch (e) { console.warn('invite code unavailable', e.message); }
 }
 
 async function load() {

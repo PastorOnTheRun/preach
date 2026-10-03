@@ -17,13 +17,32 @@ About 20 minutes. You only paste two values into `config.js`. Until you do, the 
 1. **Authentication → URL Configuration**
    - **Site URL:** your app address: `https://pastorontherun.github.io/preach/`
    - **Redirect URLs:** add the same address. For local testing, also add `http://localhost:8765/`.
-2. **Authentication → Sign In / Providers → Email:** make sure Email is enabled. Leave "Confirm email" on.
+2. **Authentication → Sign In / Providers → Email:** make sure Email is enabled. Turn **"Confirm email" off** (new accounts are protected by the team invite code instead, see step 3b).
 3. **Email sending (required for preachers).** Supabase's built-in email only delivers to members of your Supabase team, about 2 emails per hour, from `noreply@mail.app.supabase.io`, and on the Free plan its templates **can't be edited**, so it sends a link, not the 6-digit code the app asks for. To send codes to preachers you need your own email sender:
    - In Resend (resend.com), **verify your church's domain** (Domains → Add, then add the DNS records it shows). Without a verified domain Resend only delivers to your own address.
    - Create a Resend API key with *Sending access* (it can be limited to that domain).
    - **Authentication → Emails → SMTP Settings** → enable custom SMTP: host `smtp.resend.com`, port `465`, user `resend`, password = that API key, sender email e.g. `preach@yourchurch.org`, sender name `Preach`.
    - **Authentication → Rate Limits** → raise "emails per hour" (e.g. 30).
 4. **Authentication → Emails → Templates** (available once custom SMTP is on): for both **Magic Link** and **Confirm signup**, set the subject to `Your Preach sign-in code: {{ .Token }}` and paste the body from `supabase/email-templates/sign-in-code.html` (big code, no links). Sign-in codes are 6 digits and expire after 10 minutes (Authentication → Providers → Email → Email OTP length / expiration).
+
+## 3b. Team sign-up with an invite code (no email needed) — already done on the live project
+Preachers create their own account in the app: **Sign in → Create an account** (name, email, password, confirm password, team invite code). They're signed straight in; no email is sent. To stop strangers signing up, the server checks the invite code:
+
+1. **Confirm email is off** (`mailer_autoconfirm`), see step 3.2.
+2. In **SQL Editor**, run `supabase/team-invite.sql`. It creates a private settings table (not readable by the app or any signed-in user), a random starting code, the check function, and `get_invite_code()` for admins.
+3. **Authentication → Hooks → Before User Created** → enable it, type *Postgres*, function `public.hook_require_invite_code`. (A Before User Created hook is used instead of a plain trigger on `auth.users` because Supabase hides trigger errors as "Database error saving new user", while hook messages reach the app, e.g. "That team invite code isn’t right. Check it with Jake and try again.")
+
+**See the current code:** open the **Review** page while signed in as an admin. It's shown at the top.
+
+**Change the code** (e.g. if it leaks) with one line in the SQL Editor. Codes ignore case, spaces and dashes when people type them:
+```sql
+update private.app_settings set value = 'HOPE-2468' where key = 'invite_code';
+```
+Existing accounts are never affected. Only new sign-ups need the code.
+
+Notes:
+- "Email me a sign-in code" only works for people who already have an account (it never creates one). Until a custom email sender is set up (step 3), preachers should sign in with their **password**.
+- Because the hook requires a code for *every* new user, **Authentication → Users → Add user** in the dashboard may be refused. Use the app's Create an account page instead, or temporarily turn the hook off.
 
 > **No email sender yet?** Password sign-in still works without one. Go to **Authentication → Users → Add user → Create new user**, enter the preacher's email and a password, and tick **Auto Confirm User**. Then give them the password.
 
@@ -37,7 +56,7 @@ About 20 minutes. You only paste two values into `config.js`. Until you do, the 
 3. Commit and deploy as usual. The anon key is meant to be public. The security rules from step 2 are what protect each preacher's data.
 
 ## 5. Make yourself the admin
-1. Open the app → **Sign in** → enter your email → use the link or code.
+1. Open the app → **Sign in** → sign in (or **Create an account** with the team invite code).
 2. In Supabase → **SQL Editor**, run this one line (with your email):
    ```sql
    update public.profiles set role = 'admin' where email = 'jake@yourchurch.org';

@@ -95,11 +95,13 @@ function redirectUrl() {
 }
 function friendly(error) {
   const m = (error && (error.message || error.error_description)) || String(error);
+  if (/signups not allowed for otp|otp_disabled/i.test(m)) return 'There’s no account with that email yet. Tap “Create an account” below.';
   if (/rate limit|only request this after|security purposes/i.test(m)) return 'Please wait a minute before asking for another code.';
   if (/invalid login credentials/i.test(m)) return 'That email and password don’t match. Try again, or get an email code instead.';
   if (/email not confirmed/i.test(m)) return 'Please confirm your email first. Check your inbox for the confirmation code.';
-  if (/token has expired|invalid|otp/i.test(m)) return 'That code didn’t work. Check the 6 digits, or tap “Send a new code”.';
   if (/already registered/i.test(m)) return 'There’s already an account with that email. Sign in instead.';
+  if (/invite code/i.test(m)) return m;
+  if (/token has expired|invalid|otp/i.test(m)) return 'That code didn’t work. Check the 6 digits, or tap “Send a new code”.';
   if (/password should be|weak/i.test(m)) return 'Please choose a longer password (at least 8 characters).';
   if (/fetch|network|failed to/i.test(m)) return 'Couldn’t reach the server. Check the internet connection.';
   return m;
@@ -112,12 +114,14 @@ async function call(fn) {
   return data;
 }
 /** Email a one-time sign-in code (the email template shows {{ .Token }}, no link: shared iPads). */
-export const sendCode = email => call(c => c.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectUrl(), shouldCreateUser: true } }));
+export const sendCode = email => call(c => c.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectUrl(), shouldCreateUser: false } })); // new people use Create an account
 export const sendMagicLink = sendCode; // old name
 /** Verify the emailed code. type 'email' = sign-in code; 'signup' = confirm a new password account. */
 export const verifyCode = (email, token, type = 'email') => call(c => c.auth.verifyOtp({ email, token: String(token).replace(/\D/g, ''), type }));
 export const signInPassword = (email, password) => call(c => c.auth.signInWithPassword({ email, password }));
-export const signUpPassword = (email, password) => call(c => c.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl() } }));
+/** Create an account. The server's Before-User-Created hook checks the team invite code (supabase/team-invite.sql). */
+export const signUpPassword = (email, password, { displayName = '', inviteCode = '' } = {}) =>
+  call(c => c.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl(), data: { display_name: displayName, invite_code: inviteCode } } }));
 export async function signOut() {
   const client = await getClient().catch(() => null);
   if (client) { try { await client.auth.signOut({ scope: 'local' }); } catch {} }
@@ -207,5 +211,6 @@ export const admin = {
   sermons: () => call(c => c.from('sermons').select('id, user_id, title, timer_settings, updated_at, created_at').eq('deleted', false).order('updated_at', { ascending: false }).limit(500)),
   sermon: id => call(c => c.from('sermons').select('id, user_id, title, content_html, timer_settings, updated_at').eq('id', id).single()),
   recordings: () => call(c => c.from('recordings').select('id, user_id, sermon_id, sermon_title, speaker, notes, storage_path, mime_type, duration, overtime_seconds, timer_minutes, created_at, status, status_detail, graded_at, transcript, summary, grade_json').order('created_at', { ascending: false }).limit(500)),
+  inviteCode: () => call(c => c.rpc('get_invite_code')),
   signedUrl: async path => (await call(c => c.storage.from(BUCKET).createSignedUrl(path, 60 * 60))).signedUrl
 };

@@ -138,7 +138,10 @@ export function claimUnowned(userId) {
   if (n) write('library', all);
   return n;
 }
-export function removeOwnedBy(userId) { lib().filter(m => m.ownerId === userId).forEach(m => removeLocal(m.id)); }
+export function removeOwnedBy(userId) {
+  lib().filter(m => m.ownerId === userId).forEach(m => removeLocal(m.id));
+  const all = read('cursor', {}) || {}; delete all[userId]; write('cursor', all); // next sign-in pulls everything again
+}
 export function tombstones() { return read('tombstones', []); }
 export function dropTombstone(id) { write('tombstones', tombstones().filter(t => t.id !== id)); }
 export function syncCursor(userId) { return (read('cursor', {}) || {})[userId] || null; }

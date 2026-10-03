@@ -1,7 +1,8 @@
 /*
  * In-browser mock of the subset of supabase-js v2 that Preach uses. Served by the
  * Playwright tests in place of vendor/supabase.js. Simulates:
- *   - auth: magic link (code 123456), password sign-in/up, sessions, onAuthStateChange
+ *   - auth: email code (123456, existing users only when shouldCreateUser=false), password sign-in,
+ *     sign-up with team invite code (MOCK_INVITE, autoconfirm → signed straight in), sessions, onAuthStateChange
  *   - PostgREST: select/eq/gt/order/limit/single/maybeSingle, insert/upsert/update
  *   - the RLS rules from supabase/schema.sql (own rows; admins read all; role not self-editable)
  *   - server-set synced_at (monotonic), the profile-on-signup trigger
@@ -173,7 +174,10 @@
       onAuthStateChange(cb) { listeners.add(cb); setTimeout(() => cb('INITIAL_SESSION', session()), 0); return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } }; },
       async signInWithOtp({ email, options }) {
         if (!navigator.onLine) return err('Failed to fetch');
-        const db = load(); db.otps[email.toLowerCase()] = '123456'; db.log.push({ type: 'otp', email, redirect: options && options.emailRedirectTo }); save(db);
+        const db = load();
+        db.log.push({ type: 'otp-request', email, create: options && options.shouldCreateUser }); save(db);
+        if (options && options.shouldCreateUser === false && !db.users.find(x => x.email === email.toLowerCase())) return { data: null, error: { message: 'Signups not allowed for otp', code: 'otp_disabled', status: 422 } };
+        db.otps[email.toLowerCase()] = '123456'; db.log.push({ type: 'otp', email, redirect: options && options.emailRedirectTo }); save(db);
         return { data: {}, error: null };
       },
       async verifyOtp({ email, token }) {
@@ -187,11 +191,17 @@
         if (!u || u.password !== password) return err('Invalid login credentials');
         return { data: { session: startSession(u), user: u }, error: null };
       },
-      async signUp({ email, password }) {
-        const db = load();
+      async signUp({ email, password, options }) {
+        const db = load(); const meta = (options && options.data) || {};
+        const norm = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        // Before User Created hook (supabase/team-invite.sql)
+        if (!meta.invite_code) return { data: null, error: { message: 'A team invite code is needed to create an account. Ask Jake for it.', status: 403 } };
+        if (norm(meta.invite_code) !== norm(window.__MOCK_INVITE || 'GRACE-1234')) return { data: null, error: { message: 'That team invite code isn’t right. Check it with Jake and try again.', status: 403 } };
         if (db.users.find(x => x.email === email.toLowerCase())) return err('User already registered');
-        const u = findOrCreateUser(db, email, password); save(db);
-        return { data: { user: u, session: null }, error: null }; // email confirmation required
+        const u = findOrCreateUser(db, email, password);
+        const prof = db.profiles.find(p => p.id === u.id); if (prof && meta.display_name) prof.display_name = meta.display_name; // handle_new_user
+        u.user_metadata = meta; db.log.push({ type: 'signup', email, meta }); save(db);
+        return { data: { user: u, session: startSession(u) }, error: null }; // mailer_autoconfirm = true
       },
       async signOut() { localStorage.removeItem(SK); fire('SIGNED_OUT', null); return { error: null }; }
     };
@@ -243,7 +253,14 @@
       return ch;
     }
     async function removeChannel(ch) { return ch.unsubscribe(); }
-    return { auth, storage, from: t => new Query(t), channel, removeChannel, functions: { invoke: invokeFn } };
+    async function rpc(name) {
+      const db = load(); const uid = uidNow();
+      if (name !== 'get_invite_code') return err('function not found', 'PGRST202');
+      if (!uid) return err('permission denied for function get_invite_code', '42501');
+      if (roleOf(db, uid) !== 'admin') return err('Admins only', '42501');
+      return { data: window.__MOCK_INVITE || 'GRACE-1234', error: null };
+    }
+    return { auth, storage, from: t => new Query(t), rpc, channel, removeChannel, functions: { invoke: invokeFn } };
   }
   window.supabase = { createClient };
 })();
