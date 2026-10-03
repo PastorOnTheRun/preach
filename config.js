@@ -10,5 +10,5 @@
 window.PREACH_CONFIG = {
   supabaseUrl: 'https://bpndhidtxzgjxmrgffyp.supabase.co',
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwbmRoaWR0eHpnanhtcmdmZnlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwMTE5NjMsImV4cCI6MjEwNjU4Nzk2M30.-31EEjZw16XPnbEfqyj3XVWX93XnaT2P61S49mLBmY4',  // anon (public) key
-  apiBibleKey: ''
+  apiBibleKey: 'EKJqZ9D2Ekpn3IyUm1Cav'
 };
