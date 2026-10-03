@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Preach · Screen</title>
+  <meta name="theme-color" content="#000000">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="preload" href="fonts/archivo-wide-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/screen.css">
+  <script src="config.js"></script>
+</head>
+<body>
+<!-- Projector page. Shows ONLY a neutral waiting state, then the slides the preacher sends.
+     It never shows the pairing code (input is masked and cleared), the manuscript, the timer or notes. -->
+<main id="wait" class="wait">
+  <div class="wait-card">
+    <div class="wordmark">PREACH</div>
+    <div class="wait-labels"><span>Family Church</span><span>Screen</span></div>
+    <h1 id="wait-title">Waiting to connect</h1>
+    <form id="pair-form" autocomplete="off" hidden>
+      <label for="pair-code" class="lbl">Pairing code</label>
+      <input id="pair-code" type="password" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="8" aria-describedby="pair-help">
+      <button id="pair-go" type="submit">Connect</button>
+      <p id="pair-help" class="help">On the preacher’s iPad: Settings › Big screen › Show code. Typing is hidden.</p>
+    </form>
+    <p id="wait-status" class="status" role="status"></p>
+  </div>
+</main>
+<main id="stage" class="stage" hidden aria-live="polite">
+  <div id="slide" class="slide"></div>
+</main>
+<div id="blank" class="blank" hidden></div>
+<script type="module" src="js/screen.js"></script>
+</body>
+</html>

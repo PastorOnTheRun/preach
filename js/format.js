@@ -1,9 +1,10 @@
 // Turning pasted / imported content into clean, safe sermon HTML.
-// Allowed output: h1-h3, p, strong, em, u, ul, ol, li, blockquote, hr, br.
+// Allowed output: h1-h3, p, strong, em, u, mark (highlight), ul, ol, li, blockquote, hr, br.
 import { escapeHtml } from './util.js';
+import { highlightFromStyle } from './slides.js';
 
 const BLOCK_MAP = { H1: 'h1', H2: 'h2', H3: 'h3', H4: 'h3', H5: 'h3', H6: 'h3', P: 'p', DIV: 'p', LI: 'li', UL: 'ul', OL: 'ol', BLOCKQUOTE: 'blockquote', PRE: 'p', SECTION: 'p', ARTICLE: 'p', TR: 'p' };
-const INLINE_MAP = { STRONG: 'strong', B: 'strong', EM: 'em', I: 'em', U: 'u', CITE: 'em', MARK: 'strong' };
+const INLINE_MAP = { STRONG: 'strong', B: 'strong', EM: 'em', I: 'em', U: 'u', CITE: 'em', MARK: 'mark' };
 const DROP = new Set(['SCRIPT', 'STYLE', 'IMG', 'SVG', 'VIDEO', 'AUDIO', 'IFRAME', 'OBJECT', 'EMBED', 'HEAD', 'TITLE', 'META', 'LINK', 'NOSCRIPT', 'TEMPLATE', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'CANVAS']);
 
 /** Sanitize arbitrary HTML (Word / Google Docs / Pages paste, mammoth output) to our small allowlist. */
@@ -20,7 +21,8 @@ function styleFlags(el) {
   const fwNormal = /font-weight\s*:\s*(normal|[1-4]00)/i.test(st);
   const it = /font-style\s*:\s*italic/i.test(st);
   const un = /text-decoration[^;]*underline/i.test(st);
-  return { fw, fwNormal, it, un };
+  const hl = !BLOCK_MAP[el.tagName] && !!highlightFromStyle(st); // Word / Google Docs highlighter
+  return { fw, fwNormal, it, un, hl };
 }
 
 function walk(src, dest) {
@@ -46,6 +48,7 @@ function walk(src, dest) {
       if (f.fw && !closest(target, 'STRONG')) { const s = document.createElement('strong'); target.appendChild(s); target = s; }
       if (f.it && !closest(target, 'EM')) { const s = document.createElement('em'); target.appendChild(s); target = s; }
       if (f.un && !closest(target, 'U')) { const s = document.createElement('u'); target.appendChild(s); target = s; }
+      if (f.hl && !closest(target, 'MARK')) { const s = document.createElement('mark'); target.appendChild(s); target = s; }
     }
     walk(node, target);
   }
@@ -78,20 +81,25 @@ function tidy(root) {
     p.appendChild(n);
   }
   // Collapse whitespace-only blocks, trailing <br>s, and empty inline wrappers.
-  frag.querySelectorAll('strong, em, u').forEach(e => { if (!e.textContent.trim() && !e.querySelector('br')) unwrap(e); });
+  frag.querySelectorAll('strong, em, u, mark').forEach(e => { if (!e.textContent.trim() && !e.querySelector('br')) unwrap(e); });
   frag.querySelectorAll('p, h1, h2, h3, li, blockquote').forEach(b => {
     while (b.lastChild && b.lastChild.nodeName === 'BR') b.lastChild.remove();
     if (!b.textContent.trim()) b.remove();
   });
   frag.querySelectorAll('ul, ol').forEach(l => { if (!l.querySelector('li')) l.remove(); });
   let html = frag.innerHTML.replace(/\u00a0/g, ' ').replace(/[ \t]{2,}/g, ' ');
-  return html.trim();
+  return markEquals(html).trim();
 }
 function unwrap(el) { const parent = el.parentNode; while (el.firstChild) parent.insertBefore(el.firstChild, el); el.remove(); }
 
-/** Inline Markdown: **bold**, __bold__, *italic*, _italic_. Input already HTML-escaped. */
+/** ==highlighted== text (in text content only, never inside tags) becomes <mark>. */
+function markEquals(html) {
+  return html.replace(/(^|>)([^<]*)/g, (all, gt, text) => gt + text.replace(/==([^=\n<>][^\n<>]*?)==/g, '<mark>$1</mark>'));
+}
+
+/** Inline Markdown: **bold**, __bold__, *italic*, _italic_, ==highlight==. Input already HTML-escaped. */
 function inlineMd(s) {
-  return s
+  return markEquals(s)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/__(.+?)__/g, '<strong>$1</strong>')
     .replace(/(^|[\s(“"'])\*(\S(?:[^*]*?\S)?)\*(?=[\s).,;:!?”"']|$)/g, '$1<em>$2</em>')
@@ -182,7 +190,7 @@ export async function importFile(file) {
     const mammoth = await loadMammoth();
     const arrayBuffer = await file.arrayBuffer();
     const result = await mammoth.convertToHtml({ arrayBuffer }, {
-      styleMap: ['p[style-name=\'Title\'] => h1:fresh', 'p[style-name=\'Subtitle\'] => h2:fresh', 'u => u'],
+      styleMap: ['p[style-name=\'Title\'] => h1:fresh', 'p[style-name=\'Subtitle\'] => h2:fresh', 'u => u', 'highlight => mark'],
       convertImage: mammoth.images.imgElement(() => Promise.resolve({ src: '' }))
     });
     return { title: base, html: sanitizeHtml(result.value) };

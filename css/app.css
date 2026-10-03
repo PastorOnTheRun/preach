@@ -1,41 +1,67 @@
-/* Preach — sermon delivery app. Calm, high-contrast, big touch targets. */
+/* Preach — sermon delivery app. High-contrast, big touch targets. */
+/* Visual language matched to Jake's Stage Ready app (PastorOnTheRun/stage-ready, "whole-app reference aesthetic"):
+   warm off-white dotted-grid backdrop, crisp white cards with thin borders and square-ish corners,
+   brand orange #FF7010 + near-black #141110, Archivo Wide headings, small uppercase monospace labels.
+   Dark theme follows Stage Ready's dark stage screens (#120e0c night, warm brown panels). */
+@font-face {
+  font-family: "Archivo Wide";
+  src: url("../fonts/archivo-wide-latin.woff2") format("woff2");
+  font-weight: 100 900; font-style: normal; font-display: swap;
+}
 :root {
-  --bg: #f6f4ef;
+  --bg: #f3f2ef;
+  --page: #ffffff;              /* preaching page: plain white for reading */
   --surface: #ffffff;
-  --surface-2: #efece5;
-  --text: #1d2125;
-  --muted: #6a6f76;
-  --line: #e2ded5;
-  --accent: #23645b;
-  --accent-ink: #ffffff;
-  --accent-soft: #dcebe7;
-  --ref: #1f5f8b;
-  --warn1: #f4c430;
-  --warn1-ink: #2a2100;
-  --warn2: #f08a24;
-  --warn2-ink: #2a1300;
-  --danger: #e0393e;
+  --surface-2: #f1eee9;
+  --text: #1a1512;
+  --text-2: #3b342e;
+  --muted: #5e5750;
+  --line: #d4cfc8;
+  --line-strong: #141110;
+  --accent: #FF7010;            /* brand orange: fills, bars, borders (never small text on white) */
+  --accent-hi: #a84300;         /* orange text on light */
+  --accent-ink: #1c0d03;        /* text on orange */
+  --accent-soft: #ffe9da;
+  --accent-edge: #c45200;
+  --black: #141110;
+  --dots: rgba(26,21,18,.16);
+  --ref: #a84300;
+  --warn1: #ffce56;
+  --warn1-ink: #17130a;
+  --warn2: #FF7010;
+  --warn2-ink: #1c0d03;
+  --danger: #e0393e;            /* overtime red stays red */
   --danger-ink: #ffffff;
-  --shadow: 0 1px 2px rgba(20, 20, 20, .06), 0 8px 24px rgba(20, 20, 20, .06);
-  --radius: 16px;
+  --ok: #17693c;
+  --shadow: none;
+  --radius: 6px;
+  --r-sm: 4px;
   --tap: 52px;
   --reading-font: Charter, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
-  --ui-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ui-font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --head-font: "Archivo Wide", "Arial Black", Inter, ui-sans-serif, system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --reading-size: 30px;
   color-scheme: light;
 }
 [data-theme="dark"] {
-  --bg: #0e1012;
-  --surface: #171a1d;
-  --surface-2: #1f2327;
-  --text: #ebe8e1;
-  --muted: #979da4;
-  --line: #2a2f34;
-  --accent: #6cc3b1;
-  --accent-ink: #0b1513;
-  --accent-soft: #1b302c;
-  --ref: #8cc4ef;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
+  --bg: #120e0c;
+  --page: #120e0c;
+  --surface: #1a1410;
+  --surface-2: #241c16;
+  --text: #f5f3ed;
+  --text-2: #dcd6cc;
+  --muted: #b8b4ab;
+  --line: #3d3229;
+  --line-strong: #5a4a3d;
+  --accent: #FF7010;
+  --accent-hi: #ff9a52;
+  --accent-ink: #1c0d03;
+  --accent-soft: #3a2010;
+  --accent-edge: #ff8126;
+  --dots: rgba(245,243,237,.07);
+  --ref: #ffb27a;
+  --ok: #7ae6a2;
   color-scheme: dark;
 }
 [data-font="sans"] { --reading-font: var(--ui-font); }
@@ -399,3 +425,183 @@ dialog[open] { animation: dlgin .18s ease-out; }
 .review-msg h2 { margin: 12px 0 8px; }
 #dlg-sermon { width: min(900px, calc(100vw - 32px)); }
 #dlg-sermon .reading { font-size: 21px; }
+
+/* ==========================================================================
+   Family Church Students look (matches PastorOnTheRun/stage-ready)
+   Dotted-grid backdrop · crisp white cards, thin borders, 4–6px corners ·
+   Archivo Wide headings · small uppercase monospace labels · solid orange / black blocks.
+   The preaching page itself stays plain (white or dark) so the manuscript reads cleanly.
+   ========================================================================== */
+body {
+  font-family: var(--ui-font);
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, var(--dots) 1px, transparent 1.3px);
+  background-size: 18px 18px; background-position: 9px 9px;
+}
+#preach { background: var(--page); }
+:focus-visible { outline: 3px solid var(--accent-edge); outline-offset: 2px; }
+
+/* Headings + labels */
+.brand h1, .signin-card h1, .continue h2, .dlg-head h2, .review-msg h2, .verse-ref, .timer-big {
+  font-family: var(--head-font); font-weight: 850; letter-spacing: 0;
+}
+.continue h2 { font-family: var(--head-font); font-size: 22px; line-height: 1.15; }
+.dlg-head h2 { font-size: 19px; }
+.verse-ref { font-size: 22px; }
+.timer-big { font-weight: 900; }
+.brand { gap: 12px; }
+.brand img { width: 52px; height: 52px; border-radius: var(--r-sm); box-shadow: none; }
+.brand h1 { font-size: 30px; line-height: 1; color: var(--accent); text-transform: uppercase; font-weight: 900; }
+.brand p, #rv-who { margin-top: 6px; font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-hi); }
+.section-title, .continue .eyebrow, .rv-detail h4, .home-foot, .field .help.mono {
+  font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+}
+.section-title { color: var(--text); margin: 28px 2px 10px; }
+.continue .eyebrow { color: var(--accent-hi); }
+.home-foot { color: var(--muted); font-weight: 600; }
+.item .sub, .rv-sub, .p-title { font-family: var(--mono); font-size: 13px; letter-spacing: .01em; }
+.p-title { text-transform: uppercase; letter-spacing: .06em; font-size: 12px; font-weight: 700; }
+
+/* Cards, tiles, list items: white, thin crisp border, square-ish */
+.card, .tile, .item, .rv-item, .editor { border-radius: var(--radius); border: 1px solid var(--line); box-shadow: none; background: var(--surface); }
+.continue { border-color: var(--line-strong); border-width: 1px; position: relative; overflow: hidden; }
+.continue::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: var(--accent); }
+.continue { padding-left: 32px; }
+.tile { padding: 0; min-height: 0; overflow: hidden; gap: 0; }
+.tile > .ic { display: block; width: 34px; height: 34px; margin: 0; padding: 18px 20px; box-sizing: content-box; align-self: stretch; background: var(--black); color: var(--accent); stroke-width: 1.9; }
+.tiles .tile:nth-child(odd) > .ic { background: var(--accent); color: var(--accent-ink); }
+.tile .t { font-family: var(--head-font); font-weight: 850; font-size: 15px; padding: 14px 18px 2px; }
+.tile .s { font-family: var(--mono); font-size: 12.5px; padding: 0 18px 16px; }
+.tile:hover { border-color: var(--line-strong); }
+.item { border-radius: var(--r-sm); }
+.item.current { border-color: var(--accent-edge); box-shadow: inset 0 0 0 1px var(--accent-edge); background: linear-gradient(90deg, var(--accent-soft), var(--surface) 55%); }
+.item .name { font-weight: 750; }
+
+/* Buttons: boxed, 4px corners; primary = orange fill with dark ink (Stage Ready .btn.primary) */
+.btn, .icon-btn, .chip, .stepper button, .stepper input.val, .nav-btn, .rec-btn, .timer-pill, .account-btn, .select, .page-ind, .field input[type="text"], .field input[type="password"], .field textarea, .si-input, .rv-text { border-radius: var(--r-sm); }
+.btn { font-weight: 800; border-color: rgba(26,21,18,.22); }
+[data-theme="dark"] .btn { border-color: var(--line); }
+.btn.primary, #next-btn {
+  background: linear-gradient(180deg, #ff8126, var(--accent)); border-color: var(--accent); color: var(--accent-ink); font-weight: 800;
+}
+.btn.primary:active, #next-btn:active { filter: brightness(.94); }
+.btn.xl { border-radius: var(--r-sm); font-size: 19px; }
+.btn.ghost { border-color: transparent; }
+.btn.danger { color: #b3261e; border-color: rgba(179,38,30,.4); }
+[data-theme="dark"] .btn.danger { color: #ff765f; border-color: rgba(255,118,95,.45); }
+.icon-btn:hover { background: var(--surface-2); }
+.segmented { background: none; padding: 0; gap: 6px; border-radius: 0; }
+.segmented button { border: 1px solid rgba(26,21,18,.22); border-radius: var(--r-sm); background: var(--surface); text-transform: uppercase; letter-spacing: .06em; font-size: 14px; font-weight: 800; }
+[data-theme="dark"] .segmented button { border-color: var(--line); }
+.segmented button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-edge); box-shadow: inset 0 0 0 1px var(--accent-edge); color: var(--text); }
+.chip { font-family: var(--head-font); font-weight: 850; font-size: 17px; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.switch span { border-radius: 4px; }
+.switch span::before { border-radius: 3px; }
+.switch input:checked + span { background: var(--accent); }
+
+/* Preach bars */
+.pbar.top, .pbar.bottom { background: var(--page); }
+.timer-pill { font-family: var(--head-font); font-weight: 900; font-size: 24px; border-color: var(--line-strong); min-width: 136px; }
+[data-theme="dark"] .timer-pill { border-color: var(--line); }
+.timer-pill[data-phase="idle"] { color: var(--muted); border-color: var(--line); }
+.timer-pill[data-phase="ok"] { background: var(--black); color: var(--accent); border-color: var(--black); }
+.rec-btn { font-weight: 800; }
+.nav-btn { font-weight: 800; text-transform: uppercase; letter-spacing: .05em; font-size: 16px; border-color: rgba(26,21,18,.22); }
+[data-theme="dark"] .nav-btn { border-color: var(--line); }
+.page-ind { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+.page-ind .progress { border-radius: 0; height: 5px; }
+.page-ind .progress span { border-radius: 0; }
+
+/* Manuscript accents (reading text stays serif for legibility) */
+.reading h1, .reading h2 { color: var(--accent-hi); }
+.reading blockquote { border-left-color: var(--accent); }
+
+/* Dialogs: square-ish white sheets with a black hairline */
+dialog { border-radius: var(--radius); border: 1px solid var(--line-strong); box-shadow: 0 24px 60px rgba(20,17,16,.28); }
+[data-theme="dark"] dialog { border-color: var(--line); }
+dialog::backdrop { background: rgba(20, 17, 16, .55); }
+.dlg-head { border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 4px; }
+.field > label, .field .label { font-weight: 800; }
+.field input[type="text"], .field input[type="password"], .field textarea { background: var(--surface); border-color: rgba(26,21,18,.22); }
+[data-theme="dark"] .field input[type="text"], [data-theme="dark"] .field input[type="password"], [data-theme="dark"] .field textarea { background: var(--surface-2); border-color: var(--line); }
+.status-line.ok { color: var(--ok); }
+.verse-ver { border-radius: 3px; background: var(--black); color: var(--accent); font-family: var(--mono); }
+.verse-text sup { color: var(--accent-hi); }
+.spinner { border-radius: 50%; }
+#toast { border-radius: var(--r-sm); background: var(--black); color: #fff; font-weight: 700; }
+@media (max-width: 600px) { dialog { border-radius: 8px 8px 0 0; border-bottom: 0; } }
+
+/* Accounts */
+.account-btn { font-weight: 800; border-color: rgba(26,21,18,.22); }
+[data-theme="dark"] .account-btn { border-color: var(--line); }
+.avatar { border-radius: 3px; background: var(--black); color: var(--accent); font-family: var(--head-font); font-weight: 900; }
+[data-theme="dark"] .avatar { background: var(--accent); color: var(--accent-ink); }
+.badge, .status-badge { border-radius: 3px; font-family: var(--mono); font-weight: 700; letter-spacing: .06em; }
+.badge.admin, .status-badge[data-s="graded"] { background: var(--black); color: var(--accent); }
+[data-theme="dark"] .badge.admin, [data-theme="dark"] .status-badge[data-s="graded"] { background: var(--accent); color: var(--accent-ink); }
+.banner { border-color: var(--accent-edge); background: linear-gradient(120deg, rgba(255,112,16,.14), rgba(255,112,16,.03) 60%), var(--surface); }
+.banner > .ic { color: var(--accent-hi); }
+.banner b { font-family: var(--head-font); font-weight: 850; font-size: 15px; }
+.signin-card { border-color: var(--line-strong); padding-top: 28px; }
+[data-theme="dark"] .signin-card { border-color: var(--line); }
+.si-logo { border-radius: var(--r-sm); box-shadow: none; }
+.signin-card h1 { font-size: 26px; text-transform: uppercase; }
+.si-input { background: var(--surface); border: 1px solid rgba(26,21,18,.28); height: 60px; }
+.si-input:focus { border-color: var(--accent-edge); box-shadow: 0 0 0 3px rgba(255,112,16,.22); }
+.si-label { font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.si-sent-icon { border-radius: var(--r-sm); background: var(--black); color: var(--accent); }
+.si-skip small { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+
+/* Review */
+.review-head .brand h1 { color: var(--accent); }
+.select { font-weight: 800; border-color: rgba(26,21,18,.22); }
+.rv-item { border-radius: var(--r-sm); }
+.rv-title { font-family: var(--head-font); font-weight: 850; font-size: 15px; }
+.rv-over { color: #b3261e; }
+[data-theme="dark"] .rv-over { color: #ff765f; }
+.rv-detail h4 { color: var(--accent-hi); }
+.rv-text { background: var(--surface-2); }
+.grade-overall { font-family: var(--head-font); font-weight: 900; color: var(--text); display: inline-block; background: var(--accent); color: var(--accent-ink); padding: 8px 14px; border-radius: 3px; }
+.grade-table th { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+
+/* Highlights in the manuscript (become big-screen slides) */
+.reading mark, .editor mark { background: rgba(255, 206, 86, .6); color: inherit; padding: 0 .06em; border-radius: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+[data-theme="dark"] .reading mark, [data-theme="dark"] .editor mark { background: rgba(255, 112, 16, .32); }
+
+/* ---------- Big screen controller ---------- */
+.screen-btn { position: relative; }
+.screen-btn.on { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-edge); }
+.screen-dot { position: absolute; right: 8px; top: 8px; width: 9px; height: 9px; border-radius: 2px; background: transparent; }
+.screen-dot[data-s="on"] { background: #1f9d57; }
+.screen-dot[data-s="off"] { background: var(--muted); }
+.slide-strip { flex: none; display: flex; align-items: stretch; gap: 10px; padding: 8px max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left)); border-top: 1px solid var(--line); background: var(--surface-2); }
+.strip-blank { flex: none; width: 112px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: var(--r-sm); border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); font-weight: 800; font-size: 13px; line-height: 1.15; text-align: center; padding: 6px; }
+.strip-blank[aria-pressed="true"] { background: #000; color: #fff; border-color: #000; }
+.strip-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.strip-status { font-family: var(--mono); font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip-status[data-s="on"] { color: var(--ok); }
+.strip-list { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
+.strip-item { flex: none; width: 176px; min-height: 64px; display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.strip-item .k { font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.strip-item .t { font-size: 13.5px; font-weight: 650; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.strip-item.k-title .t, .strip-item.k-heading .t { font-family: var(--head-font); font-weight: 850; font-size: 12px; text-transform: uppercase; }
+.strip-item.live { background: var(--black); border-color: var(--black); color: #fff; }
+.strip-item.live .k { color: var(--accent); }
+[data-theme="dark"] .strip-item.live { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+[data-theme="dark"] .strip-item.live .k { color: var(--accent-ink); }
+.strip-empty { font-size: 14px; color: var(--muted); padding: 10px 2px; }
+.screen-code-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.screen-code { min-width: 150px; height: var(--tap); display: inline-flex; align-items: center; justify-content: center; padding: 0 14px; border-radius: var(--r-sm); background: var(--black); color: var(--accent); font-family: var(--mono); font-weight: 800; font-size: 24px; letter-spacing: .3em; }
+@media (max-width: 760px) {
+  .strip-blank { width: 76px; font-size: 11.5px; }
+  .strip-item { width: 140px; }
+}
+@media (max-height: 560px) { .slide-strip { padding-top: 4px; padding-bottom: 4px; } .strip-item { min-height: 52px; } .strip-status { display: none; } }
+.home-head .brand img { display: none; }  /* the PREACH wordmark replaces the icon in the header, like Stage Ready */
+/* Wide-face timer needs a little less room on tablets / phones */
+@media (max-width: 900px) { .timer-pill { min-width: 112px; font-size: 20px; padding: 0 10px; } .rec-btn { padding: 0 10px; } }
+@media (max-width: 760px) { .timer-pill { min-width: 96px; font-size: 18px; padding: 0 8px; } }
+@media (max-width: 380px) { .timer-pill { min-width: 84px; font-size: 16px; } }
+@media (max-width: 900px) { #preach .rec-btn .lbl { display: none; } }
+@media (max-width: 380px) { .pbar.top .icon-btn { width: 42px; } .pbar.top .rec-btn { padding: 0 9px; margin-right: 0; } .timer-pill { min-width: 78px; padding: 0 6px; } }

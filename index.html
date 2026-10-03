@@ -5,14 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Preach</title>
   <meta name="description" content="Sermon delivery for the Family Church teaching team: paginated preaching view, countdown timer, CSB verse popups and recording.">
-  <meta name="theme-color" content="#f6f4ef" id="meta-theme">
+  <meta name="theme-color" content="#f3f2ef" id="meta-theme">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Preach">
   <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preload" href="fonts/archivo-wide-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/app.css">
   <script>
     // Apply saved theme before first paint to avoid a flash.
@@ -51,6 +53,8 @@
   <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="m3 6 9 7 9-7"/></symbol>
   <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8A6 6 0 0 0 4.5 12.5 3.5 3.5 0 0 0 6 19z"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="1"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-screen-off" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="1" fill="currentColor"/><path d="M8 21h8M12 17v4"/></symbol>
   <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
 </svg>
 
@@ -59,7 +63,7 @@
   <div class="wrap">
     <header class="home-head">
       <div class="brand">
-        <img src="icons/icon.svg" alt="">
+        <img src="icons/icon-192.png" alt="">
         <div><h1>Preach</h1><p>Family Church · Teaching Team</p></div>
       </div>
       <div class="head-actions">
@@ -113,7 +117,7 @@
   <div class="signin-wrap">
     <button id="si-back" class="btn ghost si-back"><svg class="ic"><use href="#i-back"/></svg>Back</button>
     <div class="signin-card card">
-      <img src="icons/icon.svg" alt="" class="si-logo">
+      <img src="icons/icon-192.png" alt="" class="si-logo">
       <h1 id="si-title">Sign in</h1>
       <p class="muted si-sub" id="si-sub">Save your sermons to your account and pick up on any device.</p>
 
@@ -173,6 +177,7 @@
       <button id="timer-toggle" class="icon-btn" aria-label="Start timer" title="Start / pause timer"><svg class="ic"><use href="#i-play"/></svg></button>
     </div>
     <div class="p-tools">
+      <button id="screen-btn" class="icon-btn screen-btn" hidden aria-label="Big screen slides" title="Big screen slides" aria-expanded="false"><svg class="ic"><use href="#i-screen"/></svg><span class="screen-dot" id="screen-dot"></span></button>
       <button id="rec-btn" class="rec-btn" aria-label="Record" title="Record sermon audio"><svg class="ic sm"><use href="#i-mic"/></svg><span class="dot"></span><span class="lbl" id="rec-label">Record</span></button>
       <button id="font-dec" class="icon-btn txt wide-only" aria-label="Smaller text" title="Smaller text"><small>A</small>−</button>
       <button id="font-inc" class="icon-btn txt wide-only" aria-label="Bigger text" title="Bigger text">A+</button>
@@ -184,6 +189,13 @@
   <div id="viewport" class="viewport">
     <div id="flow" class="flow reading"></div>
     <div class="edge-flash l"></div><div class="edge-flash r"></div>
+  </div>
+  <div id="slide-strip" class="slide-strip" hidden>
+    <button id="screen-blank" class="strip-blank" aria-pressed="false" title="Black screen (B)"><svg class="ic"><use href="#i-screen-off"/></svg><span id="screen-blank-lbl">Black screen</span></button>
+    <div class="strip-main">
+      <div class="strip-status" id="strip-status"></div>
+      <div class="strip-list" id="strip-list" role="list"></div>
+    </div>
   </div>
   <footer class="pbar bottom">
     <button id="prev-btn" class="nav-btn" aria-label="Previous page"><svg class="ic"><use href="#i-left"/></svg><span class="lbl">Previous</span></button>
@@ -237,6 +249,7 @@
     <div class="dlg-head"><div><span class="verse-ref" id="verse-ref"></span><span class="verse-ver">CSB</span></div><button class="icon-btn" data-close aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button></div>
     <div class="dlg-body"><div id="verse-body"></div></div>
     <div class="dlg-foot">
+      <button class="btn" id="verse-screen" hidden><svg class="ic sm"><use href="#i-screen"/></svg>Show on screen</button>
       <a class="btn" id="verse-bg" target="_blank" rel="noopener"><svg class="ic sm"><use href="#i-ext"/></svg>Open on BibleGateway</a>
       <button class="btn primary" data-close>Done</button>
     </div>
@@ -327,6 +340,23 @@
         <div class="help">Verse popups show the <b>Christian Standard Bible</b> only. To see the text inside the app, get a free key at <a href="https://api.bible" target="_blank" rel="noopener">api.bible</a> (Starter plan), add <b>CSB</b> as one of your Bibles, and paste the key here. Without a key, tapping a reference offers a one-tap link to the passage on BibleGateway (CSB).</div>
       </div>
       <hr class="divider">
+      <div id="s-screen-section" hidden>
+        <div class="field row-between">
+          <div><span class="label" style="margin:0">Big screen (projector)</span><div class="help" style="margin-top:2px">Show headings, highlights and quotes on the TV as you preach.</div></div>
+          <label class="switch"><input type="checkbox" id="s-screen"><span></span></label>
+        </div>
+        <div id="s-screen-on" class="field" hidden>
+          <span class="label">Pairing code</span>
+          <div class="screen-code-row">
+            <span id="s-screen-code" class="screen-code" aria-live="polite">••••••</span>
+            <button class="btn" id="s-screen-show" type="button"><svg class="ic sm"><use href="#i-eye"/></svg><span>Show code</span></button>
+            <button class="btn ghost" id="s-screen-new" type="button">New code</button>
+          </div>
+          <div class="help">On the projector computer, open <b id="s-screen-url"></b> and type this code. Keep it off the big screen.</div>
+          <div class="status-line" id="s-screen-status"></div>
+        </div>
+        <hr class="divider">
+      </div>
       <div class="field row-between">
         <div><span class="label" style="margin:0">Record when timer starts</span></div>
         <label class="switch"><input type="checkbox" id="s-rec"><span></span></label>

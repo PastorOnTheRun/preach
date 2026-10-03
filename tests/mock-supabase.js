@@ -169,7 +169,36 @@
       }
     };
     window.__mockClient = { url, key };
-    return { auth, storage, from: t => new Query(t), functions: { invoke: async () => ({ data: null, error: null }) } };
+    // Realtime broadcast mock: BroadcastChannel between pages of the same browser context.
+    // Every message is also logged to localStorage.__rtlog so tests can inspect what was sent.
+    const channels = new Set();
+    function channel(name, opts = {}) {
+      const handlers = [];
+      let bc = null;
+      const ch = {
+        topic: 'realtime:' + name,
+        on(type, filter, cb) { if (type === 'broadcast') handlers.push({ event: filter && filter.event, cb }); return ch; },
+        subscribe(cb) {
+          bc = new BroadcastChannel('mockrt:' + name);
+          bc.onmessage = e => { const m = e.data; handlers.forEach(h => { if (!h.event || h.event === m.event) h.cb({ type: 'broadcast', event: m.event, payload: m.payload }); }); };
+          channels.add(ch);
+          setTimeout(() => cb && cb('SUBSCRIBED'), 20);
+          return ch;
+        },
+        async send(msg) {
+          if (!bc) return 'error';
+          const log = JSON.parse(localStorage.getItem('__rtlog') || '[]');
+          log.push({ channel: name, event: msg.event, payload: msg.payload, from: location.pathname });
+          localStorage.setItem('__rtlog', JSON.stringify(log.slice(-400)));
+          bc.postMessage({ event: msg.event, payload: msg.payload });
+          return 'ok';
+        },
+        async unsubscribe() { if (bc) { bc.close(); bc = null; } channels.delete(ch); return 'ok'; }
+      };
+      return ch;
+    }
+    async function removeChannel(ch) { return ch.unsubscribe(); }
+    return { auth, storage, from: t => new Query(t), channel, removeChannel, functions: { invoke: async () => ({ data: null, error: null }) } };
   }
   window.supabase = { createClient };
 })();

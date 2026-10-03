@@ -22,6 +22,9 @@ export const DEFAULT_SETTINGS = {
   warn2: 2,
   recordWithTimer: false,
   apiBibleKey: '',
+  screenEnabled: false,   // big-screen (projector) mode
+  screenCode: '',         // pairing code; only shown behind "Show code" in Settings
+  screenStrip: true,      // slide strip open while preaching
   speakerName: ''
 };
 

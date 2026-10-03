@@ -1,4 +1,4 @@
-# Preach — sermon delivery app (v1.1)
+# Preach — sermon delivery app (v1.2)
 
 A calm, offline-capable **preaching mode** for the Family Church (Windermere, FL) student teaching team.
 Static PWA: plain HTML/CSS/vanilla JS (ES modules), no build step, no backend. Ready for GitHub Pages.
@@ -33,11 +33,23 @@ Only the CSB Bible ID is ever requested; no verse text is bundled or cached beyo
 - Admins (`profiles.role = 'admin'`) get a **Review** button → `review.html`: every preacher's recordings and sermons, newest first, filter by preacher, audio via 1-hour signed URLs, read-only manuscript, transcript/summary/grade when present.
 - Security is enforced by Row Level Security in `supabase/schema.sql`, not by the UI.
 
+## Big screen (projector) mode
+- Open **`screen.html`** on the projector/TV computer (e.g. https://pastorontherun.github.io/preach/screen.html). It shows only a neutral “Waiting to connect” screen with a masked code box.
+- On the preacher’s iPad: **Settings › Big screen** → turn on → **Show code** (hidden by default, auto-hides after 30 s) → type it on the projector. After pairing the code is never shown on the big screen; it reconnects by itself after a reload.
+- Slides are generated automatically from the sermon: the title, every heading, every **highlighted** passage (Word/Google Docs highlighter in .docx or pasted text, `==marked==` text) and every blockquote. Blockquotes that start with “Note:”, “Pause…”, “Reminder”, “Tip” or “[…]” are treated as stage notes and never shown.
+- While preaching, the screen follows your page turns (first slide on the page, else the last one before it). The **slide strip** (monitor button in the top bar) lets you tap any slide. **Black screen** button (or the **B** / **.** key) blanks the projector. In a verse popup with CSB text, **Show on screen** sends that passage with its CSB copyright line.
+- Pairing uses a Supabase Realtime broadcast channel named after the code; only the current slide (kind, text, optional citation/copyright) is ever sent — never the manuscript, timer, notes or the code.
+
+## Design
+Matches Jake’s Stage Ready app (PastorOnTheRun/stage-ready): warm off-white dotted-grid backdrop (#f3f2ef), crisp white cards with thin borders and 4–6 px corners, brand orange #FF7010 with near-black #141110, Archivo Wide headings (SIL OFL, `fonts/`), small uppercase monospace labels, orange primary buttons with dark text, black/orange “blocks”. Dark mode uses Stage Ready’s dark stage palette. The manuscript stays in a serif reading face; the overtime frame stays red.
+
 ## Tests
 ```
 python3 -m http.server 8765 --bind 127.0.0.1 &
 /workspace/venv/bin/python tests/e2e.py           # core app (64 checks)
 /workspace/venv/bin/python tests/accounts_e2e.py  # accounts/sync/review with mocked Supabase (41 checks)
+/workspace/venv/bin/python tests/screen_e2e.py    # slide extraction + big-screen pairing with mocked Realtime
+/workspace/venv/bin/python tests/style_shots.py   # style-*.png screenshots
 ```
 
 ## Files
@@ -53,6 +65,10 @@ js/feedback.js          sendForFeedback() — uploads recording to Supabase (gra
 js/cloud.js             Supabase client (lazy-loaded), auth (magic link/code/password), remote, admin queries
 js/sync.js              local-first sync engine (pull → push, last-write-wins)
 js/review.js + review.html  admin review page
+js/slides.js            slide extraction (headings, highlights, quotes, verses)
+js/screenlink.js        Realtime broadcast link + pairing codes
+screen.html + js/screen.js + css/screen.css  projector page
+fonts/                  Archivo Wide (SIL OFL)
 vendor/supabase.js      supabase-js 2.117.2 (UMD, MIT)
 supabase/schema.sql     tables, RLS, storage bucket + policies, signup trigger
 SETUP.md                step-by-step Supabase setup for Jake

@@ -51,6 +51,12 @@ About 20 minutes. You only paste two values into `config.js`. Until you do, the 
 
 Everyone else who signs up is a "preacher". Preachers can only see their own sermons and recordings. Admins can see everyone's. Nobody can make themselves an admin from the app.
 
+## 5b. Big screen (projector) mode — nothing extra to create
+Screen mode uses Supabase **Realtime broadcast** on a public channel named after the pairing code. It works with the anon key out of the box
+(**Realtime → Settings → “Allow public access to channels”** is Enabled by default; leave it on, or pairing stops working).
+Only slide text is broadcast (headings, highlights, quotes, verses) — never manuscripts — and the 6-character code is what keeps strangers off your screen; tap **New code** in Settings any time.
+To use it: open `https://pastorontherun.github.io/preach/screen.html` on the projector computer, then in the app on the iPad go to Settings › Big screen › Show code and type the code on the projector.
+
 ## 6. Quick test
 - [ ] On a second device or browser, sign in as a test preacher, add a sermon, and preach a few pages.
 - [ ] Sign in on another device with the same account. The sermon, timer and last page show up within about a minute (or tap the account button → **Sync now**).

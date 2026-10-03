@@ -10,8 +10,10 @@ import { sendForFeedback, setFeedbackSync } from './feedback.js';
 import { isConfigured, initAuth, onAuth, auth, isAdmin, sendMagicLink, verifyCode, signInPassword, signUpPassword, signOut, updateDisplayName, canSync, supabaseRemote } from './cloud.js';
 import { SyncEngine } from './sync.js';
 import { SAMPLE_TITLE, SAMPLE_MD } from './sample.js';
+import { extractSlides, publicSlide, verseSlide } from './slides.js';
+import { ScreenLink, newCode, validCode, screenAvailable } from './screenlink.js';
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 const FONT_SIZES = [18, 20, 22, 24, 26, 28, 30, 33, 36, 40, 44, 48, 54, 60, 68, 76];
 const PRESETS = [20, 25, 30, 35, 40];
 const WPM = 130; // typical preaching pace, for the length estimate
@@ -30,7 +32,7 @@ function applyAppearance() {
   root.dataset.theme = settings.theme;
   root.dataset.font = settings.font;
   root.style.setProperty('--reading-size', settings.fontSize + 'px');
-  $('#meta-theme').setAttribute('content', settings.theme === 'dark' ? '#0e1012' : '#f6f4ef');
+  $('#meta-theme').setAttribute('content', settings.theme === 'dark' ? '#120e0c' : '#f3f2ef');
   $('#theme-btn use').setAttribute('href', settings.theme === 'dark' ? '#i-sun' : '#i-moon');
   $$('.segmented[data-setting]').forEach(seg => {
     $$('button', seg).forEach(b => b.setAttribute('aria-pressed', String(settings[seg.dataset.setting] === b.dataset.val)));
@@ -224,6 +226,7 @@ function onPageChange(page, pages) {
   $('#prev-btn').disabled = page === 0;
   $('#next-btn').disabled = page >= pages - 1;
   if (preachId && paginator) setPosition(preachId, paginator.anchor);
+  screenFollow(page);
 }
 
 async function enterPreach(id) {
@@ -242,6 +245,7 @@ async function enterPreach(id) {
   try { await document.fonts.ready; } catch {}
   await new Promise(r => requestAnimationFrame(r));
   paginator.setContent(state.positions[id] || 0);
+  buildSlides(s.title);
   requestWakeLock();
   const key = apiKey();
   if (key) setTimeout(() => prefetch(refsInSermon, key), 1500);
@@ -253,6 +257,7 @@ async function exitPreach() {
     await stopRecording();
   }
   if (paginator) paginator.stop();
+  clearSlides();
   releaseWakeLock();
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
   document.title = 'Preach';
@@ -327,6 +332,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'End') { e.preventDefault(); paginator?.goTo(paginator.pages - 1); return; }
   if (NEXT_KEYS.has(e.key)) { e.preventDefault(); turn(e.shiftKey && e.key === ' ' ? -1 : 1, 'key'); return; }
   if (PREV_KEYS.has(e.key)) { e.preventDefault(); turn(-1, 'key'); return; }
+  if ((e.key === 'b' || e.key === 'B' || e.key === '.') && screenOn()) { e.preventDefault(); toggleBlank(); return; }
   if (e.key === '+' || e.key === '=') { changeFontSize(1); }
   if (e.key === '-' || e.key === '_') { changeFontSize(-1); }
 });
@@ -575,6 +581,7 @@ async function openVerse(ref) {
   const body = $('#verse-body');
   const dlg = $('#dlg-verse');
   if (!dlg.open) dlg.showModal();
+  versePassage = null; $('#verse-screen').hidden = true;
   const key = apiKey();
   if (!key) {
     body.innerHTML = `<p class="verse-msg">Tap <b>Open on BibleGateway</b> to read ${escapeHtml(label)} in the CSB.</p>
@@ -589,12 +596,163 @@ async function openVerse(ref) {
     body.innerHTML = `<div class="verse-text">${p.html}</div><div class="verse-copy"></div>`;
     $('.verse-copy', body).textContent = p.copyright;
     reportFums(p.fumsToken);
+    versePassage = p; $('#verse-screen').hidden = !screenOn();
   } catch (e) {
     if (my !== verseReq) return;
     body.innerHTML = `<p class="verse-msg"></p><p class="muted" style="font-size:15px">You can still open ${escapeHtml(label)} in the CSB on BibleGateway.</p>`;
     $('.verse-msg', body).textContent = e.message;
   }
 }
+
+
+// ---------------------------------------------------------------- big screen (controller)
+// The preacher's app drives screen.html on the projector over a Realtime broadcast channel.
+// Only slide content is ever sent (publicSlide): never the manuscript body, timer, notes or the code.
+let slides = [];            // slides for the sermon being preached, with char anchors
+let liveIdx = -1;           // index into slides of what's on screen
+let extraSlide = null;      // a verse sent from the verse popup (until the next page turn)
+let blank = false;          // black screen
+let screenLink = null, screenSeen = 0, screenSeq = 0, codeShownTimer = null, versePassage = null;
+const SCREEN_STALE_MS = 40000;
+
+const screenOn = () => screenAvailable() && settings.screenEnabled && validCode(settings.screenCode);
+const screenConnected = () => !!screenLink && Date.now() - screenSeen < SCREEN_STALE_MS;
+function screenUrl() { return new URL('screen.html', location.href).href.replace(/^https?:\/\//, '').replace(/\?.*$/, ''); }
+
+async function startScreenLink() {
+  await stopScreenLink(false);
+  if (!screenOn()) { renderScreenUi(); return; }
+  const link = new ScreenLink('controller', settings.screenCode, {
+    onMessage: (ev) => { if (ev === 'hello') { screenSeen = Date.now(); renderScreenUi(); sendScreen(); } },
+    onJoined: () => { link.send('ping'); sendScreen(); renderScreenUi(); },
+    onStatus: () => renderScreenUi()
+  });
+  screenLink = link;
+  try { await link.start(); } catch (e) { screenLink = null; renderScreenUi(e.message); }
+}
+async function stopScreenLink(sayBye = true) {
+  const l = screenLink; screenLink = null; screenSeen = 0;
+  if (l) { if (sayBye) await l.send('bye'); await l.stop(); }
+  renderScreenUi();
+}
+function currentSlide() { return blank ? null : (extraSlide || slides[liveIdx] || null); }
+function sendScreen() {
+  if (!screenLink) return;
+  screenLink.send('show', { seq: ++screenSeq, blank, slide: publicSlide(currentSlide()) });
+}
+
+function buildSlides(title) {
+  slides = []; liveIdx = -1; extraSlide = null;
+  if (!screenOn() || !paginator) { renderStrip(); return; }
+  const titleKey = String(title || '').trim().toLowerCase();
+  slides = extractSlides(flow, { title })
+    .filter((s, i, all) => !(s.kind === 'heading' && s.text.toLowerCase() === titleKey && all.findIndex(x => x.kind === 'heading') === i))
+    .map(s => {
+      let anchor = 0;
+      if (s.node) { const k = paginator.nodes.indexOf(s.node); anchor = k >= 0 ? paginator.offsets[k] + (s.offset || 0) : 0; }
+      return { ...s, anchor };
+    });
+  screenFollow(paginator.page, true);
+}
+function clearSlides() { slides = []; liveIdx = -1; extraSlide = null; sendScreen(); renderStrip(); }
+
+/** Auto-follow: the first slide that starts on this page, else the last slide before it. */
+function screenFollow(page, force = false) {
+  if (!slides.length || !paginator) return;
+  const pages = slides.map(s => (s.kind === 'title' ? 0 : paginator.pageOfChar(s.anchor)));
+  let idx = pages.findIndex(p => p === page);
+  if (idx < 0) { for (let i = 0; i < pages.length; i++) if (pages[i] < page) idx = i; }
+  if (idx < 0) idx = 0;
+  // Several slides start on this page: prefer the latest one we've already reached on screen.
+  const changed = idx !== liveIdx || extraSlide;
+  if (changed || force) { liveIdx = idx; extraSlide = null; sendScreen(); renderStrip(); }
+}
+function showSlide(i) { liveIdx = i; extraSlide = null; blank = false; sendScreen(); renderStrip(); }
+function toggleBlank() { blank = !blank; sendScreen(); renderStrip(); toast(blank ? 'Big screen is black' : 'Big screen back on', 1400); }
+
+const KIND_LABEL = { title: 'Title', heading: 'Heading', quote: 'Quote', highlight: 'Highlight', verse: 'Verse' };
+function renderStrip() {
+  const on = screenOn();
+  $('#screen-btn').hidden = !on;
+  const open = on && settings.screenStrip && currentView === 'preach';
+  const strip = $('#slide-strip');
+  if (strip.hidden === open) { strip.hidden = !open; if (paginator && currentView === 'preach') requestAnimationFrame(() => paginator.layout()); }
+  $('#screen-btn').setAttribute('aria-expanded', String(open));
+  $('#screen-btn').classList.toggle('on', open);
+  if (!on) return;
+  $('#screen-blank').setAttribute('aria-pressed', String(blank));
+  $('#screen-blank-lbl').textContent = blank ? 'Screen is black · tap to show' : 'Black screen';
+  const list = $('#strip-list');
+  const items = slides.map((s, i) => ({ s, i, live: !blank && !extraSlide && i === liveIdx }));
+  if (extraSlide) items.push({ s: extraSlide, i: 'v', live: !blank });
+  list.innerHTML = items.length ? '' : '<div class="strip-empty">No slides yet. Headings, highlighted text and quotes become slides.</div>';
+  for (const it of items) {
+    const b = document.createElement('button');
+    b.className = 'strip-item k-' + it.s.kind + (it.live ? ' live' : '');
+    b.dataset.i = it.i; b.setAttribute('role', 'listitem');
+    b.innerHTML = '<span class="k"></span><span class="t"></span>';
+    b.querySelector('.k').textContent = (it.live ? '● ' : '') + KIND_LABEL[it.s.kind];
+    b.querySelector('.t').textContent = it.s.kind === 'verse' ? it.s.cite : it.s.text;
+    list.appendChild(b);
+  }
+  const live = list.querySelector('.live'); if (live && live.scrollIntoView) live.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  renderScreenUi();
+}
+function renderScreenUi(err) {
+  const on = screenOn(), conn = screenConnected();
+  $('#screen-dot').dataset.s = !on ? '' : conn ? 'on' : 'off';
+  const msg = err ? 'Screen link problem: ' + err
+    : !screenLink ? 'Screen mode is off.'
+    : conn ? (blank ? 'Big screen connected · black' : 'Big screen connected')
+    : screenLink.status === 'joined' ? 'Waiting for the big screen… open ' + screenUrl() + ' on the projector computer.'
+    : 'Connecting…';
+  $('#strip-status').textContent = msg;
+  $('#strip-status').dataset.s = conn ? 'on' : 'off';
+  if ($('#dlg-settings').open) { const st = $('#s-screen-status'); st.textContent = on ? msg : ''; st.className = 'status-line' + (conn ? ' ok' : err ? ' err' : ''); }
+}
+function hideCode() { clearTimeout(codeShownTimer); $('#s-screen-code').textContent = '••••••'; $('#s-screen-code').classList.remove('shown'); $('#s-screen-show span').textContent = 'Show code'; }
+function renderScreenSettings() {
+  $('#s-screen-section').hidden = !screenAvailable();
+  $('#s-screen').checked = !!settings.screenEnabled;
+  $('#s-screen-on').hidden = !settings.screenEnabled;
+  $('#s-screen-url').textContent = screenUrl();
+  hideCode(); renderScreenUi();
+}
+$('#s-screen').addEventListener('change', async e => {
+  settings.screenEnabled = e.target.checked;
+  if (settings.screenEnabled && !validCode(settings.screenCode)) settings.screenCode = newCode();
+  saveSettings(); renderScreenSettings();
+  if (settings.screenEnabled) await startScreenLink(); else await stopScreenLink(true);
+  renderStrip();
+});
+$('#s-screen-show').addEventListener('click', () => {
+  const el = $('#s-screen-code');
+  if (el.classList.contains('shown')) { hideCode(); return; }
+  el.textContent = settings.screenCode; el.classList.add('shown');
+  $('#s-screen-show span').textContent = 'Hide code';
+  clearTimeout(codeShownTimer); codeShownTimer = setTimeout(hideCode, 30000);
+});
+$('#s-screen-new').addEventListener('click', async () => {
+  if (!(await confirmDlg('Make a new pairing code? Any connected big screen will disconnect and need the new code.', 'New code'))) return;
+  await stopScreenLink(true);
+  settings.screenCode = newCode(); saveSettings(); hideCode();
+  await startScreenLink();
+});
+$('#dlg-settings').addEventListener('close', hideCode);
+$('#screen-btn').addEventListener('click', () => { settings.screenStrip = !settings.screenStrip; saveSettings(); renderStrip(); });
+$('#screen-blank').addEventListener('click', toggleBlank);
+$('#strip-list').addEventListener('click', e => {
+  const b = e.target.closest('.strip-item'); if (!b) return;
+  if (b.dataset.i === 'v') { blank = false; sendScreen(); renderStrip(); return; }
+  showSlide(+b.dataset.i);
+});
+$('#verse-screen').addEventListener('click', () => {
+  if (!versePassage) return;
+  extraSlide = verseSlide(versePassage); blank = false; sendScreen(); renderStrip();
+  toast('On the big screen: ' + extraSlide.cite, 1600);
+});
+setInterval(() => { if (screenLink) renderScreenUi(); }, 10000);
+if (screenOn()) startScreenLink();
 
 // ---------------------------------------------------------------- settings
 function openSettings() {
@@ -605,6 +763,7 @@ function openSettings() {
   $('#s-key-status').className = 'status-line';
   $('#s-rec').checked = settings.recordWithTimer;
   $('#s-storage').textContent = `Sermons use about ${fmtBytes(storageUsage())} on this device.`;
+  renderScreenSettings();
   applyAppearance();
   $('#dlg-settings').showModal();
 }
@@ -830,4 +989,4 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 // Expose a tiny hook for automated tests / debugging.
-window.__preach = { get paginator() { return paginator; }, timer, recorder, settings, state, enterPreach, sync, auth, VERSION };
+window.__preach = { screen: { get slides() { return slides; }, get liveIdx() { return liveIdx; }, get blank() { return blank; }, connected: () => screenConnected() }, get paginator() { return paginator; }, timer, recorder, settings, state, enterPreach, sync, auth, VERSION };
