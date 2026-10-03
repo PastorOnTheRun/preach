@@ -95,10 +95,10 @@ function redirectUrl() {
 }
 function friendly(error) {
   const m = (error && (error.message || error.error_description)) || String(error);
-  if (/rate limit|only request this after|security purposes/i.test(m)) return 'Please wait a minute before asking for another email.';
-  if (/invalid login credentials/i.test(m)) return 'That email and password don’t match. Try again, or use an email link instead.';
-  if (/email not confirmed/i.test(m)) return 'Please confirm your email first. Check your inbox for the confirmation link.';
-  if (/token has expired|invalid|otp/i.test(m)) return 'That code didn’t work. It may have expired. Ask for a new email and try again.';
+  if (/rate limit|only request this after|security purposes/i.test(m)) return 'Please wait a minute before asking for another code.';
+  if (/invalid login credentials/i.test(m)) return 'That email and password don’t match. Try again, or get an email code instead.';
+  if (/email not confirmed/i.test(m)) return 'Please confirm your email first. Check your inbox for the confirmation code.';
+  if (/token has expired|invalid|otp/i.test(m)) return 'That code didn’t work. Check the 6 digits, or tap “Send a new code”.';
   if (/already registered/i.test(m)) return 'There’s already an account with that email. Sign in instead.';
   if (/password should be|weak/i.test(m)) return 'Please choose a longer password (at least 8 characters).';
   if (/fetch|network|failed to/i.test(m)) return 'Couldn’t reach the server. Check the internet connection.';
@@ -111,8 +111,11 @@ async function call(fn) {
   if (error) throw new Error(friendly(error));
   return data;
 }
-export const sendMagicLink = email => call(c => c.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectUrl(), shouldCreateUser: true } }));
-export const verifyCode = (email, token) => call(c => c.auth.verifyOtp({ email, token: String(token).replace(/\D/g, ''), type: 'email' }));
+/** Email a one-time sign-in code (the email template shows {{ .Token }}, no link: shared iPads). */
+export const sendCode = email => call(c => c.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectUrl(), shouldCreateUser: true } }));
+export const sendMagicLink = sendCode; // old name
+/** Verify the emailed code. type 'email' = sign-in code; 'signup' = confirm a new password account. */
+export const verifyCode = (email, token, type = 'email') => call(c => c.auth.verifyOtp({ email, token: String(token).replace(/\D/g, ''), type }));
 export const signInPassword = (email, password) => call(c => c.auth.signInWithPassword({ email, password }));
 export const signUpPassword = (email, password) => call(c => c.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl() } }));
 export async function signOut() {

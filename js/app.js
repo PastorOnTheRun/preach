@@ -7,14 +7,14 @@ import { Paginator } from './paginator.js';
 import { CountdownTimer } from './timer.js';
 import { SermonRecorder, listRecordings, getRecording, deleteRecording, recoverOrphans, wipeRecordings, extFor, recordingSupported, updateRecording } from './recorder.js';
 import { sendForFeedback, setFeedbackSync } from './feedback.js';
-import { isConfigured, initAuth, onAuth, auth, isAdmin, sendMagicLink, verifyCode, signInPassword, signUpPassword, signOut, updateDisplayName, canSync, supabaseRemote, requestGrading, myFeedback } from './cloud.js';
+import { isConfigured, initAuth, onAuth, auth, isAdmin, sendCode, verifyCode, signInPassword, signUpPassword, signOut, updateDisplayName, canSync, supabaseRemote, requestGrading, myFeedback } from './cloud.js';
 import { renderFeedback, feedbackStatus } from './grade.js';
 import { SyncEngine } from './sync.js';
 import { SAMPLE_TITLE, SAMPLE_MD } from './sample.js';
 import { extractSlides, publicSlide, verseSlide } from './slides.js';
 import { ScreenLink, newCode, validCode, screenAvailable } from './screenlink.js';
 
-export const VERSION = '1.3.0';
+export const VERSION = '1.3.1';
 const FONT_SIZES = [18, 20, 22, 24, 26, 28, 30, 33, 36, 40, 44, 48, 54, 60, 68, 76];
 const PRESETS = [20, 25, 30, 35, 40];
 const WPM = 130; // typical preaching pace, for the length estimate
@@ -953,21 +953,23 @@ function renderAccount() {
   if ($('#dlg-account').open) $('#acct-sync').textContent = syncText();
 }
 
-// Sign-in screen
+// Sign-in screen (code-first: shared church iPads can't open the email's link on the right device)
 let siEmail = '';
+let siCodeType = 'email'; // 'signup' after creating a password account that needs confirming
 let returnView = 'home';
 function siStep(step) {
   ['si-email-form', 'si-pw-form', 'si-sent'].forEach(id => { $('#' + id).hidden = id !== step; });
-  $('#si-title').textContent = step === 'si-sent' ? 'Check your email' : 'Sign in';
+  $('#si-title').textContent = step === 'si-sent' ? 'Enter your code' : 'Sign in';
   $('#si-sub').hidden = step === 'si-sent';
   siStatus('');
 }
 function siStatus(msg, kind = '') { const el = $('#si-status'); el.textContent = msg; el.className = 'status-line si-status ' + kind; }
-function openSignIn() {
+function openSignIn({ fresh = false } = {}) {
   if (!isConfigured()) { toast('Accounts aren’t set up yet.'); return; }
   returnView = currentView === 'signin' ? 'home' : currentView;
+  if (fresh) siEmail = '';
   siStep('si-email-form');
-  if (siEmail) $('#si-email').value = siEmail;
+  $('#si-email').value = siEmail || '';
   show('signin');
   setTimeout(() => $('#si-email').focus(), 60);
 }
@@ -975,25 +977,47 @@ async function busy(btn, fn) {
   btn.disabled = true;
   try { await fn(); } catch (e) { siStatus(e.message, 'err'); } finally { btn.disabled = false; }
 }
+function showCodeStep(email, type = 'email') {
+  siEmail = email; siCodeType = type;
+  $('#si-sent-email').textContent = email; $('#si-code').value = '';
+  siStep('si-sent');
+  setTimeout(() => $('#si-code').focus(), 60);
+}
 $('#si-email-form').addEventListener('submit', e => {
   e.preventDefault();
   const email = $('#si-email').value.trim();
   if (!email) return;
   busy($('#si-send'), async () => {
-    siStatus('Sending…');
-    await sendMagicLink(email);
-    siEmail = email; $('#si-sent-email').textContent = email; $('#si-code').value = '';
-    siStep('si-sent');
+    siStatus('Sending your code…');
+    await sendCode(email);
+    showCodeStep(email);
   });
 });
-$('#si-sent').addEventListener('submit', e => {
-  e.preventDefault();
-  const code = $('#si-code').value.trim();
-  if (code.replace(/\D/g, '').length < 6) { siStatus('Type the 6-digit code from the email.', 'err'); return; }
-  busy($('#si-verify'), async () => { siStatus('Signing in…'); await verifyCode(siEmail, code); });
+let siVerifying = false;
+async function submitCode() {
+  const digits = $('#si-code').value.replace(/\D/g, '');
+  if (digits.length !== 6) { siStatus('Type the 6-digit code from the email.', 'err'); return; }
+  if (siVerifying) return;
+  siVerifying = true;
+  await busy($('#si-verify'), async () => {
+    siStatus('Signing in…');
+    try { await verifyCode(siEmail, digits, siCodeType); }
+    catch (err) {
+      if (siCodeType === 'email') throw err;
+      await verifyCode(siEmail, digits, 'email'); // some projects issue confirm codes as 'email'
+    }
+  });
+  siVerifying = false;
+}
+$('#si-sent').addEventListener('submit', e => { e.preventDefault(); submitCode(); });
+// Paste-friendly: accept "123 456", "123-456" or the whole email line; sign in as soon as 6 digits are there.
+$('#si-code').addEventListener('input', e => {
+  const el = e.target, digits = el.value.replace(/\D/g, '').slice(0, 6);
+  if (el.value !== digits) el.value = digits;
+  if (digits.length === 6) submitCode(); else if ($('#si-status').classList.contains('err')) siStatus('');
 });
-$('#si-resend').addEventListener('click', e => busy(e.currentTarget, async () => { await sendMagicLink(siEmail); siStatus('Sent again. Check your inbox (and spam folder).', 'ok'); }));
-$('#si-other').addEventListener('click', () => siStep('si-email-form'));
+$('#si-resend').addEventListener('click', e => busy(e.currentTarget, async () => { await sendCode(siEmail); siCodeType = 'email'; $('#si-code').value = ''; $('#si-code').focus(); siStatus('New code sent. Check your inbox (and spam folder).', 'ok'); }));
+$('#si-other').addEventListener('click', () => { siStep('si-email-form'); $('#si-email').select(); });
 $('#si-use-pw').addEventListener('click', () => { siStep('si-pw-form'); $('#si-pw-email').value = $('#si-email').value; setTimeout(() => $(($('#si-pw-email').value ? '#si-pw' : '#si-pw-email')).focus(), 50); });
 $('#si-use-link').addEventListener('click', () => { siStep('si-email-form'); $('#si-email').value = $('#si-pw-email').value; });
 $('#si-pw-form').addEventListener('submit', e => {
@@ -1005,7 +1029,7 @@ $('#si-pw-create').addEventListener('click', e => {
   if (!email || pw.length < 8) { siStatus('Enter your email and a password of at least 8 characters.', 'err'); return; }
   busy(e.currentTarget, async () => {
     const data = await signUpPassword(email, pw);
-    if (!data || !data.session) { siEmail = email; siStatus('Almost done! Check your email to confirm your account, then sign in.', 'ok'); }
+    if (!data || !data.session) { showCodeStep(email, 'signup'); siStatus('Almost done! Type the 6-digit code we emailed to confirm your account.', 'ok'); }
   });
 });
 $('#si-back').addEventListener('click', () => show(returnView === 'signin' ? 'home' : returnView));
@@ -1022,7 +1046,6 @@ $('#btn-account').addEventListener('click', () => {
   $('#acct-role').textContent = role === 'admin' ? 'Admin' : 'Preacher';
   $('#acct-role').className = 'badge' + (role === 'admin' ? ' admin' : '');
   $('#acct-name').value = (auth.profile && auth.profile.display_name) || '';
-  $('#acct-wipe').checked = false;
   $('#acct-sync').textContent = syncText();
   $('#dlg-account').showModal();
 });
@@ -1032,17 +1055,24 @@ $('#acct-name').addEventListener('change', async e => {
   catch (err) { toast(err.message, 4000); }
 });
 $('#acct-sync-now').addEventListener('click', async () => { $('#acct-sync').textContent = 'Syncing…'; await sync.syncNow(); $('#acct-sync').textContent = syncText(); });
-$('#acct-signout').addEventListener('click', async () => {
+async function doSignOut(clearDevice) {
   const uid = auth.user && auth.user.id;
   if (sync.pending() && navigator.onLine) await sync.syncNow();
-  if (sync.pending() && !(await confirmDlg('Some changes haven’t synced yet. Sign out anyway? They stay on this device.', 'Sign out'))) return;
-  const wipe = $('#acct-wipe').checked;
+  if (sync.pending()) {
+    const msg = clearDevice
+      ? 'Some changes haven’t synced yet and would be lost if this iPad is cleared. Sign out and clear anyway?'
+      : 'Some changes haven’t synced yet. Sign out anyway? They stay on this device.';
+    if (!(await confirmDlg(msg, 'Sign out'))) return;
+  }
   $('#dlg-account').close();
   await signOut();
-  if (wipe && uid) removeOwnedBy(uid);
+  if (clearDevice && uid) removeOwnedBy(uid);
   renderHome();
-  toast('Signed out');
-});
+  if (clearDevice) { toast('Signed out. This iPad is ready for the next preacher.', 3500); openSignIn({ fresh: true }); }
+  else toast('Signed out');
+}
+$('#acct-signout-clear').addEventListener('click', () => doSignOut(true));
+$('#acct-signout').addEventListener('click', () => doSignOut(false));
 
 onAuth(event => {
   if (event === 'signed-in') {

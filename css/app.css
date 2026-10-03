@@ -629,3 +629,13 @@ dialog::backdrop { background: rgba(20, 17, 16, .55); }
 .fb-slot:empty { display: none; }
 .fb-slot .fb-pill { margin-left: 0; }
 .btn.sm { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+
+/* ---------- code-first sign-in (v1.3.1) ---------- */
+#si-code.si-code { height: 84px; font-size: 44px; font-weight: 800; letter-spacing: .35em; padding: 0 0 0 .35em; font-family: var(--mono); text-align: center; }
+#si-code.si-code::placeholder { color: var(--muted); opacity: .45; letter-spacing: .35em; }
+.si-code-label { text-align: center; }
+.si-hint { margin: 0; font-size: 14px; color: var(--muted); text-align: center; line-height: 1.45; }
+.si-sent-msg b { word-break: break-all; }
+.acct-out { display: grid; gap: 8px; }
+.acct-out .label { margin-bottom: 2px; }
+.acct-out .help { margin: -2px 0 6px; font-size: 13px; color: var(--muted); }

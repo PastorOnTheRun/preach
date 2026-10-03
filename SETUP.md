@@ -18,17 +18,12 @@ About 20 minutes. You only paste two values into `config.js`. Until you do, the 
    - **Site URL:** your app address: `https://pastorontherun.github.io/preach/`
    - **Redirect URLs:** add the same address. For local testing, also add `http://localhost:8765/`.
 2. **Authentication → Sign In / Providers → Email:** make sure Email is enabled. Leave "Confirm email" on.
-3. **Email sending (required for preachers).** Supabase's built-in email only delivers to members of your Supabase team, and only about 2 emails per hour. To send to preachers you need your own email sender:
-   - Create a free account at https://resend.com (or Postmark) and verify your church's domain.
-   - **Authentication → Emails → SMTP Settings** → enable custom SMTP. Resend's values are host `smtp.resend.com`, port `465`, user `resend`, password = your Resend API key. Use a sender like `preach@yourchurch.org`.
-   - Optional: **Authentication → Rate Limits** → raise "emails per hour" (the default is 30).
-4. **Authentication → Emails → Templates → Magic Link:** add the 6-digit code so preachers using the iPad home-screen app can type it in (on iPhone/iPad, tapping the link opens Safari instead of the app). Replace the body with:
-   ```html
-   <h2>Sign in to Preach</h2>
-   <p><a href="{{ .ConfirmationURL }}">Tap here to sign in</a></p>
-   <p>Or type this code in the app: <strong>{{ .Token }}</strong></p>
-   ```
-   Do the same for the **Confirm signup** template. First-time magic-link users get that email instead.
+3. **Email sending (required for preachers).** Supabase's built-in email only delivers to members of your Supabase team, about 2 emails per hour, from `noreply@mail.app.supabase.io`, and on the Free plan its templates **can't be edited**, so it sends a link, not the 6-digit code the app asks for. To send codes to preachers you need your own email sender:
+   - In Resend (resend.com), **verify your church's domain** (Domains → Add, then add the DNS records it shows). Without a verified domain Resend only delivers to your own address.
+   - Create a Resend API key with *Sending access* (it can be limited to that domain).
+   - **Authentication → Emails → SMTP Settings** → enable custom SMTP: host `smtp.resend.com`, port `465`, user `resend`, password = that API key, sender email e.g. `preach@yourchurch.org`, sender name `Preach`.
+   - **Authentication → Rate Limits** → raise "emails per hour" (e.g. 30).
+4. **Authentication → Emails → Templates** (available once custom SMTP is on): for both **Magic Link** and **Confirm signup**, set the subject to `Your Preach sign-in code: {{ .Token }}` and paste the body from `supabase/email-templates/sign-in-code.html` (big code, no links). Sign-in codes are 6 digits and expire after 10 minutes (Authentication → Providers → Email → Email OTP length / expiration).
 
 > **No email sender yet?** Password sign-in still works without one. Go to **Authentication → Users → Add user → Create new user**, enter the preacher's email and a password, and tick **Auto Confirm User**. Then give them the password.
 

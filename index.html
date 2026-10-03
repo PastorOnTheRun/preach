@@ -124,7 +124,8 @@
       <form id="si-email-form" class="si-step" autocomplete="on">
         <label for="si-email" class="si-label">Your email</label>
         <input id="si-email" class="si-input" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@familychurch.org" required>
-        <button class="btn primary xl block" type="submit" id="si-send"><svg class="ic"><use href="#i-mail"/></svg>Email me a sign-in link</button>
+        <button class="btn primary xl block" type="submit" id="si-send"><svg class="ic"><use href="#i-mail"/></svg>Email me a sign-in code</button>
+        <p class="si-hint">We’ll email you a 6-digit code to type in here. Works great on a shared iPad.</p>
         <button class="btn ghost block" type="button" id="si-use-pw">Use a password instead</button>
       </form>
 
@@ -135,16 +136,16 @@
         <input id="si-pw" class="si-input" type="password" autocomplete="current-password" minlength="8" required>
         <button class="btn primary xl block" type="submit" id="si-pw-signin">Sign in</button>
         <button class="btn block" type="button" id="si-pw-create">Create an account</button>
-        <button class="btn ghost block" type="button" id="si-use-link">Email me a link instead</button>
+        <button class="btn ghost block" type="button" id="si-use-link">Email me a code instead</button>
       </form>
 
-      <form id="si-sent" class="si-step" hidden>
-        <div class="si-sent-icon"><svg class="ic lg"><use href="#i-mail"/></svg></div>
-        <p class="si-sent-msg">We sent a sign-in link to <b id="si-sent-email"></b>.<br>Open the email <b>on this device</b> and tap the link.</p>
-        <label for="si-code" class="si-label">Or type the 6-digit code from the email</label>
-        <input id="si-code" class="si-input si-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456">
-        <button class="btn primary xl block" type="submit" id="si-verify">Sign in with code</button>
-        <div class="si-row"><button class="btn ghost" type="button" id="si-resend">Send again</button><button class="btn ghost" type="button" id="si-other">Use a different email</button></div>
+      <form id="si-sent" class="si-step" hidden autocomplete="off">
+        <p class="si-sent-msg">We emailed a 6-digit code to<br><b id="si-sent-email"></b></p>
+        <label for="si-code" class="si-label si-code-label">Sign-in code</label>
+        <input id="si-code" class="si-input si-code" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="12" placeholder="••••••" aria-describedby="si-code-help" enterkeyhint="go">
+        <div class="si-hint" id="si-code-help">Check your inbox (and spam). The code works for 10 minutes. You can paste it.<br>Email shows a button instead of a code? Open it on this device.</div>
+        <button class="btn primary xl block" type="submit" id="si-verify">Sign in</button>
+        <div class="si-row"><button class="btn ghost" type="button" id="si-resend">Send a new code</button><button class="btn ghost" type="button" id="si-other">Use a different email</button></div>
       </form>
 
       <div class="status-line si-status" id="si-status" role="status"></div>
@@ -393,8 +394,13 @@
       </div>
       <a class="btn block" id="acct-review" href="review.html" hidden><svg class="ic sm"><use href="#i-eye"/></svg>Open the review page</a>
       <hr class="divider">
-      <label class="check-row"><input type="checkbox" id="acct-wipe"> Also remove my sermons from this device (shared iPad)</label>
-      <button class="btn danger block" id="acct-signout" style="margin-top:10px">Sign out</button>
+      <div class="acct-out">
+        <span class="label">Done preaching on this device?</span>
+        <button class="btn danger block xl" id="acct-signout-clear"><svg class="ic sm"><use href="#i-trash"/></svg>Sign out &amp; clear this iPad</button>
+        <div class="help">Shared iPad: signs you out and removes your sermons from this device. They stay safe in your account.</div>
+        <button class="btn block" id="acct-signout">Sign out, keep sermons here</button>
+        <div class="help">Only on your own device.</div>
+      </div>
     </div>
   </div>
 </dialog>
